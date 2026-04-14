@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Reference - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html" class="active">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Configuration Reference</h1>
+        <p class="subtitle">Complete reference for all Pi-Clock configuration files.</p>
+    </div>
+
+    <p>Pi-Clock stores configuration in plain-text files on the persistent <code>/data</code> partition. All files use a simple <code>key=value</code> format with <code>#</code> comments. The dashboard reads and writes these files, but you can also edit them directly via SSH.</p>
+
+    <div class="callout callout-info">
+        <p><strong>Live reload:</strong> When a configuration file is changed (by the dashboard or manually), the dashboard writes a trigger file at <code>/tmp/pi-clock-reload</code>. The renderer checks for this file on every frame, reloads the configuration, and deletes the trigger. Changes take effect within 1&ndash;2 seconds &mdash; no reboot required.</p>
+    </div>
+
+    <!-- ── Renderer Config ───────────────────────────────────── -->
+    <h2>Renderer Configuration</h2>
+
+    <p><strong>File:</strong> <code>/data/etc/pi-clock-renderer.conf</code></p>
+
+    <p>The main configuration file for the display renderer. Contains station settings, DX cluster parameters, propagation settings, and display preferences.</p>
+
+<pre><code><span class="comment"># Station settings</span>
+CALLSIGN=M1ABC
+QTH_LAT=51.5
+QTH_LON=-0.1
+GRID_SQUARE=IO91wm
+
+<span class="comment"># Display settings</span>
+CENTER_LON=0.0
+DISPLAY_RESOLUTION=native
+
+<span class="comment"># DX Cluster settings</span>
+DX_CLUSTER_HOST=dxc.ve7cc.net
+DX_CLUSTER_PORT=7373
+DX_DISTANCE=0
+DX_BANDS=0FFF
+DX_SPOT_AGE=900
+
+<span class="comment"># Propagation settings</span>
+ANTENNA_GAIN=0
+PROP_BANDS=FF
+
+<span class="comment"># System settings (set by pi-clock-config at boot)</span>
+HOSTNAME=pi-clock
+TIMEZONE=UTC</code></pre>
+
+    <h3>Key Reference</h3>
+
+    <table>
+        <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><code>CALLSIGN</code></td><td>String</td><td><em>(empty)</em></td><td>Your callsign, shown on the QTH marker.</td></tr>
+            <tr><td><code>QTH_LAT</code></td><td>Float</td><td><code>0.0</code></td><td>Home latitude (-90 to 90). QTH marker hidden if both lat and lon are 0.</td></tr>
+            <tr><td><code>QTH_LON</code></td><td>Float</td><td><code>0.0</code></td><td>Home longitude (-180 to 180).</td></tr>
+            <tr><td><code>GRID_SQUARE</code></td><td>String</td><td><em>(auto)</em></td><td>6-character Maidenhead locator. Auto-calculated from lat/lon if blank.</td></tr>
+            <tr><td><code>CENTER_LON</code></td><td>Float</td><td><code>0.0</code></td><td>Map centre longitude. Set to your longitude to centre the map on your location.</td></tr>
+            <tr><td><code>DISPLAY_RESOLUTION</code></td><td>String</td><td><code>native</code></td><td>One of: <code>native</code>, <code>720p</code>, <code>1080p</code>, <code>1440p</code>, <code>4k</code>. Requires reboot.</td></tr>
+            <tr><td><code>DX_CLUSTER_HOST</code></td><td>String</td><td><code>dxc.ve7cc.net</code></td><td>DX cluster server hostname.</td></tr>
+            <tr><td><code>DX_CLUSTER_PORT</code></td><td>Integer</td><td><code>7373</code></td><td>DX cluster server port.</td></tr>
+            <tr><td><code>DX_DISTANCE</code></td><td>Integer</td><td><code>0</code></td><td>Max spot distance in km (0 = unlimited).</td></tr>
+            <tr><td><code>DX_BANDS</code></td><td>Hex</td><td><code>0FFF</code></td><td>12-bit band mask (160m=bit0 through 2m=bit11). <code>0FFF</code> = all bands.</td></tr>
+            <tr><td><code>DX_SPOT_AGE</code></td><td>Integer</td><td><code>900</code></td><td>Spot expiry time in seconds. 900 = 15 minutes.</td></tr>
+            <tr><td><code>ANTENNA_GAIN</code></td><td>Integer</td><td><code>0</code></td><td>Antenna gain in dBi (-12 to 12). Affects propagation predictions.</td></tr>
+            <tr><td><code>PROP_BANDS</code></td><td>Hex</td><td><code>FF</code></td><td>8-bit band mask for propagation heat map (80m=bit0 through 10m=bit7).</td></tr>
+            <tr><td><code>LIGHTNING_FADE_MS</code></td><td>Integer</td><td><code>15000</code></td><td>Lightning strike fade time in milliseconds (5000&ndash;120000).</td></tr>
+            <tr><td><code>EARTHQUAKE_DISPLAY_S</code></td><td>Integer</td><td><code>86400</code></td><td>Earthquake display time in seconds (60&ndash;86400). Default 24 hours.</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── Layer Config ──────────────────────────────────────── -->
+    <h2>Layer Configuration</h2>
+
+    <p><strong>File:</strong> <code>/data/etc/pi-clock-layers.conf</code></p>
+
+    <p>Controls which layers are visible and their opacity. Format: <code>layername=enabled,opacity</code></p>
+
+<pre><code><span class="comment"># Layer visibility and opacity</span>
+<span class="comment"># Format: layername=enabled,opacity (opacity 0.0-1.0)</span>
+basemap=1,1.0
+daylight=1,1.0
+borders=1,0.8
+grid=0,0.5
+timezone=1,0.7
+cqzone=0,0.6
+maidenhead=0,0.5
+sun=0,1.0
+moon=0,1.0
+dxspots=0,0.9
+propagation=0,0.6
+satellite=0,0.8
+qth=1,1.0
+hud=1,1.0
+ticker=0,0.8</code></pre>
+
+    <h3>Layer Names</h3>
+
+    <table>
+        <thead><tr><th>Name</th><th>Layer</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>basemap</code></td><td>Base Map (Night)</td><td>Always on &mdash; cannot be disabled.</td></tr>
+            <tr><td><code>daylight</code></td><td>Daylight (Day/Night Blend)</td><td>Always on &mdash; cannot be disabled.</td></tr>
+            <tr><td><code>borders</code></td><td>Country Borders</td><td></td></tr>
+            <tr><td><code>grid</code></td><td>Lat/Lon Grid</td><td></td></tr>
+            <tr><td><code>timezone</code></td><td>Time Zones</td><td></td></tr>
+            <tr><td><code>cqzone</code></td><td>CQ Zones</td><td></td></tr>
+            <tr><td><code>maidenhead</code></td><td>Maidenhead Grid</td><td></td></tr>
+            <tr><td><code>sun</code></td><td>Sun Position</td><td></td></tr>
+            <tr><td><code>moon</code></td><td>Moon Position</td><td></td></tr>
+            <tr><td><code>dxspots</code></td><td>DX Cluster Spots</td><td>Requires network for cluster connection.</td></tr>
+            <tr><td><code>propagation</code></td><td>Propagation Heat Map</td><td>Uses live NOAA SFI when available.</td></tr>
+            <tr><td><code>satellite</code></td><td>Satellite Tracking</td><td>Requires network for TLE updates.</td></tr>
+            <tr><td><code>lightning</code></td><td>Lightning Strikes</td><td>Blitzortung.org WebSocket. Fetcher stops when disabled.</td></tr>
+            <tr><td><code>earthquakes</code></td><td>Earthquakes</td><td>USGS M4.5+ feed. Fetcher stops when disabled.</td></tr>
+            <tr><td><code>qth</code></td><td>Home QTH Marker</td><td>Hidden if QTH lat/lon are both 0.</td></tr>
+            <tr><td><code>hud</code></td><td>Clock / HUD</td><td></td></tr>
+            <tr><td><code>ticker</code></td><td>News Ticker</td><td>No opacity control (binary on/off).</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── Applet Config ─────────────────────────────────────── -->
+    <h2>Applet Configuration</h2>
+
+    <p><strong>File:</strong> <code>/data/etc/pi-clock-applets.conf</code></p>
+
+    <p>Controls which applet panels are displayed and their screen position. Format: <code>name=enabled,side</code></p>
+
+<pre><code><span class="comment"># Applet display and position</span>
+<span class="comment"># Format: name=enabled,side (side: left or right)</span>
+dxfeed=0,right
+solar=0,left
+muf=0,left
+voacap=0,right
+sysinfo=1,left
+features=1,right</code></pre>
+
+    <table>
+        <thead><tr><th>Name</th><th>Applet</th><th>Default Side</th></tr></thead>
+        <tbody>
+            <tr><td><code>dxfeed</code></td><td>DX Cluster Feed</td><td>right</td></tr>
+            <tr><td><code>solar</code></td><td>Solar Weather</td><td>left</td></tr>
+            <tr><td><code>muf</code></td><td>MUF Estimate</td><td>left</td></tr>
+            <tr><td><code>voacap</code></td><td>VOACAP Prediction</td><td>right</td></tr>
+            <tr><td><code>sysinfo</code></td><td>System Info</td><td>left</td></tr>
+            <tr><td><code>features</code></td><td>Active Features</td><td>right</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── Satellite Config ──────────────────────────────────── -->
+    <h2>Satellite Configuration</h2>
+
+    <p><strong>File:</strong> <code>/data/etc/pi-clock-satellites.conf</code></p>
+
+    <p>Controls which satellites are tracked. Format: <code>satname=enabled</code></p>
+
+<pre><code><span class="comment"># Satellite enable/disable</span>
+iss=1
+qo100=1
+ao91=0
+so50=0
+ao7=0
+ao73=0
+rs44=0
+jo97=0
+sonate2=0
+meteor_m2=0
+meteor_m2_2=0
+meteor_m2_3=0
+meteor_m2_4=0</code></pre>
+
+    <!-- ── Ticker Config ─────────────────────────────────────── -->
+    <h2>Ticker Configuration</h2>
+
+    <p><strong>File:</strong> <code>/data/etc/pi-clock-ticker.conf</code></p>
+
+    <p>Controls which news sources are enabled and the display mode.</p>
+
+<pre><code><span class="comment"># News ticker sources and mode</span>
+<span class="comment"># mode: 0=smooth scroll, 1=headlines</span>
+mode=0
+noaa_alerts=1
+dxworld=1
+arrl=1
+rsgb=1
+southgate=1</code></pre>
+
+    <table>
+        <thead><tr><th>Key</th><th>Values</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><code>mode</code></td><td><code>0</code> or <code>1</code></td><td>0 = smooth scroll (multi-core only), 1 = headlines mode.</td></tr>
+            <tr><td><code>noaa_alerts</code></td><td><code>0</code> or <code>1</code></td><td>NOAA Space Weather alerts.</td></tr>
+            <tr><td><code>dxworld</code></td><td><code>0</code> or <code>1</code></td><td>DX World DXpedition news.</td></tr>
+            <tr><td><code>arrl</code></td><td><code>0</code> or <code>1</code></td><td>ARRL news.</td></tr>
+            <tr><td><code>rsgb</code></td><td><code>0</code> or <code>1</code></td><td>RSGB GB2RS news.</td></tr>
+            <tr><td><code>southgate</code></td><td><code>0</code> or <code>1</code></td><td>Southgate ARC news.</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── User Config ───────────────────────────────────────── -->
+    <h2>User Configuration (Persistent)</h2>
+
+    <p><strong>File:</strong> <code>/data/etc/pi-clock-user.conf</code></p>
+
+    <p>Stores settings that must survive OS upgrades, including the user password hash, hostname, timezone, and SSH configuration. This file is written by <code>pi-clock-config</code> at boot and by the dashboard when system settings change.</p>
+
+    <div class="callout callout-warning">
+        <p><strong>Do not edit the password hash manually</strong> unless you know what you are doing. Use the dashboard or <code>pi-clock-config.txt</code> to set passwords. The hash format is SHA-512 from <code>/etc/shadow</code>.</p>
+    </div>
+
+    <!-- ── Slot Config ───────────────────────────────────────── -->
+    <h2>Slot Configuration (Boot Partition)</h2>
+
+    <p><strong>File:</strong> <code>/boot/firmware/slot.conf</code></p>
+
+    <p>Controls the A/B slot upgrade system. Written atomically by the upgrade and rollback scripts. Do not edit manually unless troubleshooting a boot failure.</p>
+
+<pre><code>ACTIVE_SLOT=A
+PREVIOUS_SLOT=B
+PENDING=false
+BOOT_TRIES=0
+SLOT_A_VERSION="Pi-Clock OS v1.0.0 (2026-04-10)"
+SLOT_B_VERSION="Pi-Clock OS v0.9.0 (2026-04-01)"</code></pre>
+
+    <table>
+        <thead><tr><th>Key</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><code>ACTIVE_SLOT</code></td><td><code>A</code> or <code>B</code> &mdash; the slot that will be booted.</td></tr>
+            <tr><td><code>PREVIOUS_SLOT</code></td><td><code>A</code> or <code>B</code> &mdash; the fallback slot for rollback.</td></tr>
+            <tr><td><code>PENDING</code></td><td><code>true</code> or <code>false</code> &mdash; whether a new slot is being validated.</td></tr>
+            <tr><td><code>BOOT_TRIES</code></td><td>Integer &mdash; incremented on each boot when PENDING=true. Rollback after 3.</td></tr>
+            <tr><td><code>SLOT_A_VERSION</code></td><td>Version string for Slot A (or empty if not installed).</td></tr>
+            <tr><td><code>SLOT_B_VERSION</code></td><td>Version string for Slot B (or empty if not installed).</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── File Locations ────────────────────────────────────── -->
+    <h2>File Location Summary</h2>
+
+    <table>
+        <thead><tr><th>File</th><th>Location</th><th>Persists</th></tr></thead>
+        <tbody>
+            <tr><td>Renderer config</td><td><code>/data/etc/pi-clock-renderer.conf</code></td><td>Yes</td></tr>
+            <tr><td>Layer config</td><td><code>/data/etc/pi-clock-layers.conf</code></td><td>Yes</td></tr>
+            <tr><td>Applet config</td><td><code>/data/etc/pi-clock-applets.conf</code></td><td>Yes</td></tr>
+            <tr><td>Satellite config</td><td><code>/data/etc/pi-clock-satellites.conf</code></td><td>Yes</td></tr>
+            <tr><td>Ticker config</td><td><code>/data/etc/pi-clock-ticker.conf</code></td><td>Yes</td></tr>
+            <tr><td>User config</td><td><code>/data/etc/pi-clock-user.conf</code></td><td>Yes</td></tr>
+            <tr><td>WiFi config</td><td><code>/data/etc/wpa_supplicant/wpa_supplicant.conf</code></td><td>Yes</td></tr>
+            <tr><td>SSH host keys</td><td><code>/data/etc/dropbear/</code></td><td>Yes</td></tr>
+            <tr><td>TLS certificates</td><td><code>/data/etc/pi-clock-certs/</code></td><td>Yes</td></tr>
+            <tr><td>Slot config</td><td><code>/boot/firmware/slot.conf</code></td><td>Yes</td></tr>
+            <tr><td>Zero-touch config</td><td><code>/boot/firmware/pi-clock-config.txt</code></td><td>Deleted after use</td></tr>
+            <tr><td>Reload trigger</td><td><code>/tmp/pi-clock-reload</code></td><td>No (tmpfs)</td></tr>
+        </tbody>
+    </table>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="dashboard.html">
+            <span class="label">Previous</span>
+            <span class="title">Web Dashboard</span>
+        </a>
+        <a href="hardware.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Hardware Guide</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

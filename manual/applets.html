@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Applets - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html" class="active">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Applets</h1>
+        <p class="subtitle">Side-panel information displays that overlay the world map.</p>
+    </div>
+
+    <p>Applets are semi-transparent information panels that stack along the left or right edges of the screen. They provide detailed data at a glance without obscuring the entire map. Each applet can be independently enabled/disabled and positioned on either side of the display.</p>
+
+    <p>When multiple applets are enabled on the same side, they stack from the bottom of the screen upward. All applets on the same side share the same width (determined by the widest applet on that side).</p>
+
+    <h2>Applet Summary</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Applet</th>
+                <th>Config Key</th>
+                <th>Default</th>
+                <th>Default Side</th>
+                <th>Network</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>DX Cluster Feed</td><td><code>dxfeed</code></td><td>Off</td><td>Right</td><td>Yes</td></tr>
+            <tr><td>Solar Weather</td><td><code>solar</code></td><td>Off</td><td>Left</td><td>Yes</td></tr>
+            <tr><td>MUF Estimate</td><td><code>muf</code></td><td>Off</td><td>Left</td><td>No*</td></tr>
+            <tr><td>VOACAP Prediction</td><td><code>voacap</code></td><td>Off</td><td>Right</td><td>Yes**</td></tr>
+            <tr><td>System Info</td><td><code>sysinfo</code></td><td>On</td><td>Left</td><td>No</td></tr>
+            <tr><td>Active Features</td><td><code>features</code></td><td>On</td><td>Right</td><td>No</td></tr>
+        </tbody>
+    </table>
+
+    <p style="font-size: 0.85em; color: var(--text-muted);">
+        * MUF uses live SFI from NOAA when available, but works offline with defaults.<br>
+        ** VOACAP uses live SFI and Kp from NOAA for accuracy.
+    </p>
+
+    <!-- ── DX Cluster Feed ───────────────────────────────────── -->
+    <div class="feature-block">
+        <h3>DX Cluster Feed</h3>
+        <div class="feature-meta">
+            <span class="tag">Key: dxfeed</span>
+            <span class="tag">Updates: 30&ndash;60s</span>
+            <span class="tag">Requires Network</span>
+            <span class="tag">~250px wide</span>
+        </div>
+        <p>A compact scrolling feed of recent DX cluster spots. Displays up to 12 lines showing callsign, frequency, spotter, and any comments. Uses a monospace font for data density.</p>
+        <p>Lines are brightness-graded: the newest spot is brightest, older spots gradually fade. This makes it easy to spot fresh activity at a glance.</p>
+        <p>The feed is populated from the same DX cluster telnet connection used by the DX Spots map layer. If the DX Spots layer is not enabled, the feed applet will still work &mdash; it shares the background data connection.</p>
+        <p><strong>Dashboard:</strong> Enable/disable, choose left or right side.</p>
+    </div>
+
+    <!-- ── Solar Weather ─────────────────────────────────────── -->
+    <div class="feature-block">
+        <h3>Solar Weather</h3>
+        <div class="feature-meta">
+            <span class="tag">Key: solar</span>
+            <span class="tag">Updates: 15min</span>
+            <span class="tag">Requires Network</span>
+            <span class="tag">~300px wide</span>
+        </div>
+        <p>Displays live solar indices from NOAA's Space Weather Prediction Center. This is the single most important panel for HF operators &mdash; it tells you at a glance whether conditions are good, marginal, or poor.</p>
+
+        <h4>Indices Displayed</h4>
+        <table>
+            <thead><tr><th>Index</th><th>What It Means</th><th>Good</th><th>Warning</th><th>Bad</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong>SFI</strong></td>
+                    <td>Solar Flux Index &mdash; higher means better HF propagation</td>
+                    <td style="color:#48bb78;">&ge;120</td>
+                    <td style="color:#ffcc33;">&ge;90</td>
+                    <td style="color:#ff4444;">&lt;90</td>
+                </tr>
+                <tr>
+                    <td><strong>Kp</strong></td>
+                    <td>Planetary K-index &mdash; geomagnetic disturbance (lower is better)</td>
+                    <td style="color:#48bb78;">&le;3</td>
+                    <td style="color:#ffcc33;">&le;5</td>
+                    <td style="color:#ff4444;">&gt;5</td>
+                </tr>
+                <tr>
+                    <td><strong>Bz</strong></td>
+                    <td>Interplanetary magnetic field z-component (positive is better)</td>
+                    <td style="color:#48bb78;">&ge;0 nT</td>
+                    <td style="color:#ffcc33;">&ge;-5 nT</td>
+                    <td style="color:#ff4444;">&lt;-5 nT</td>
+                </tr>
+                <tr>
+                    <td><strong>Wind</strong></td>
+                    <td>Solar wind speed (lower is calmer)</td>
+                    <td style="color:#48bb78;">&le;450 km/s</td>
+                    <td style="color:#ffcc33;">&le;600 km/s</td>
+                    <td style="color:#ff4444;">&gt;600 km/s</td>
+                </tr>
+                <tr>
+                    <td><strong>X-ray</strong></td>
+                    <td>Solar flare class (A/B = quiet, M/X = active/stormy)</td>
+                    <td style="color:#48bb78;">A/B</td>
+                    <td style="color:#ffcc33;">C</td>
+                    <td style="color:#ff4444;">M/X</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>SDO Sun Images</h4>
+        <p>Below the indices, the applet displays a cycling set of SDO (Solar Dynamics Observatory) sun images in five different wavelengths, changing every 60 seconds. These show coronal holes, active regions, and flare activity.</p>
+
+        <p><strong>Data source:</strong> NOAA SWPC JSON API (<code>services.swpc.noaa.gov</code>). Updated every 15 minutes.</p>
+        <p><strong>Dashboard:</strong> Enable/disable, choose left or right side.</p>
+    </div>
+
+    <!-- ── MUF Estimate ──────────────────────────────────────── -->
+    <div class="feature-block">
+        <h3>MUF Estimate</h3>
+        <div class="feature-meta">
+            <span class="tag">Key: muf</span>
+            <span class="tag">Updates: 1min</span>
+            <span class="tag">Works Offline</span>
+            <span class="tag">~250px wide</span>
+        </div>
+        <p>Estimates the Maximum Usable Frequency (MUF) from your QTH in five directions:</p>
+        <ul>
+            <li><strong>N</strong> &mdash; North</li>
+            <li><strong>E</strong> &mdash; East</li>
+            <li><strong>S</strong> &mdash; South</li>
+            <li><strong>W</strong> &mdash; West</li>
+            <li><strong>NVIS</strong> &mdash; Near Vertical Incidence Skywave (local/regional coverage)</li>
+        </ul>
+
+        <h4>How It Works</h4>
+        <p>The MUF prediction is computed entirely offline using:</p>
+        <ul>
+            <li>Real solar position via the Meeus algorithm</li>
+            <li>F2-layer critical frequency model based on latitude and sunspot number</li>
+            <li>Solar zenith angle at the path midpoint for each direction</li>
+            <li>D-layer absorption estimates (ITU-R P.533)</li>
+        </ul>
+        <p>When connected to the internet, the model uses the live Solar Flux Index from NOAA for better accuracy. When offline, it defaults to SFI=100.</p>
+
+        <p><strong>Requires:</strong> QTH latitude and longitude to be set.</p>
+        <p><strong>Dashboard:</strong> Enable/disable, choose left or right side.</p>
+    </div>
+
+    <!-- ── VOACAP Prediction ─────────────────────────────────── -->
+    <div class="feature-block">
+        <h3>VOACAP Prediction</h3>
+        <div class="feature-meta">
+            <span class="tag">Key: voacap</span>
+            <span class="tag">Updates: 1min (recalc) / 10s (cycle)</span>
+            <span class="tag">Uses NOAA Data</span>
+            <span class="tag">~320px wide</span>
+        </div>
+        <p>A band-by-hour heat map showing predicted HF propagation for 8 amateur bands (80m through 10m) across all 24 UTC hours. This is the most detailed propagation display available in Pi-Clock.</p>
+
+        <h4>How to Read It</h4>
+        <p>The heat map is organised as a grid with bands on one axis and UTC hours on the other. Each cell uses opacity to indicate propagation likelihood: <strong>more opaque</strong> (solid) means higher probability of a usable path, <strong>more transparent</strong> means propagation is less likely. Fully transparent cells have no predicted propagation for that band/hour/distance combination.</p>
+
+        <h4>Distance Brackets</h4>
+        <p>The applet cycles through 8 distance brackets every 10 seconds, from NVIS (local) through to antipodal (maximum distance). This lets you see propagation predictions for different path lengths.</p>
+
+        <h4>Model Details</h4>
+        <p>The VOACAP-style model includes:</p>
+        <ul>
+            <li>F2 layer critical frequency (latitude/sunspot number model)</li>
+            <li>D-layer absorption (time-of-day and latitude dependent)</li>
+            <li>Multi-hop obliquity factors for different distances</li>
+            <li>Kp-index degradation for geomagnetic storms</li>
+        </ul>
+
+        <p><strong>Requires:</strong> QTH latitude and longitude. Uses live SFI and Kp from NOAA when available.</p>
+        <p><strong>Dashboard:</strong> Enable/disable, choose left or right side. Antenna gain and band selection configurable.</p>
+    </div>
+
+    <!-- ── System Info ───────────────────────────────────────── -->
+    <div class="feature-block">
+        <h3>System Info</h3>
+        <div class="feature-meta">
+            <span class="tag">Key: sysinfo</span>
+            <span class="tag">Updates: 10&ndash;30s</span>
+            <span class="tag">No Network</span>
+            <span class="tag">~250px wide</span>
+        </div>
+        <p>Displays hardware and software status information:</p>
+        <ul>
+            <li><strong>Hostname</strong> &mdash; the system hostname (and network address)</li>
+            <li><strong>IP Address</strong> &mdash; IPv4 (and IPv6 if available)</li>
+            <li><strong>OS</strong> &mdash; operating system name and version</li>
+            <li><strong>CPU</strong> &mdash; architecture and core count</li>
+            <li><strong>Display</strong> &mdash; current resolution and refresh rate</li>
+            <li><strong>Version</strong> &mdash; renderer version number</li>
+            <li><strong>Uptime</strong> &mdash; system uptime (refreshed on each render)</li>
+        </ul>
+        <p>This applet is particularly useful for confirming the IP address of your Pi-Clock when you need to access the dashboard, and for verifying the display resolution detected at boot.</p>
+        <p><strong>Dashboard:</strong> Enable/disable, choose left or right side.</p>
+    </div>
+
+    <!-- ── Active Features ───────────────────────────────────── -->
+    <div class="feature-block">
+        <h3>Active Features</h3>
+        <div class="feature-meta">
+            <span class="tag">Key: features</span>
+            <span class="tag">Updates: on config change</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>Shows a summary of which layers and applets are currently enabled. Useful as a quick visual reference to confirm your configuration without opening the dashboard.</p>
+        <p><strong>Dashboard:</strong> Enable/disable, choose left or right side.</p>
+    </div>
+
+    <!-- ── Configuration ─────────────────────────────────────── -->
+    <h2>Applet Configuration</h2>
+
+    <p>Applets are configured via the dashboard or by editing <code>/data/etc/pi-clock-applets.conf</code>:</p>
+
+<pre><code><span class="comment"># Applet configuration — format: name=enabled,side</span>
+dxfeed=1,right
+solar=1,left
+muf=0,left
+voacap=1,right
+sysinfo=1,left
+features=1,right</code></pre>
+
+    <p>Set the first value to <code>1</code> (enabled) or <code>0</code> (disabled). The second value is the screen side: <code>left</code> or <code>right</code>.</p>
+
+    <div class="callout callout-info">
+        <p><strong>Layout tip:</strong> Balance your applets between left and right sides to keep the central map area clear. Propagation-heavy setups work well with solar and MUF on the left, VOACAP and DX feed on the right.</p>
+    </div>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="display.html">
+            <span class="label">Previous</span>
+            <span class="title">Display Layers</span>
+        </a>
+        <a href="dashboard.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Web Dashboard</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

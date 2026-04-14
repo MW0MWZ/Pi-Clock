@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi-Clock - Configuration Generator</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --pic-gold: #c9a84c;
+            --pic-gold-light: #dbb85c;
+            --text-light: #e8e0d4;
+            --text-muted: #9a8e80;
+            --bg-dark: #2e2c2a;
+            --bg-card: #3a3a3a;
+            --border-color: #504a46;
+            --input-bg: #333030;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #2a2826 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 30px 20px 20px;
+            margin-bottom: 24px;
+        }
+
+        header img { width: 80px; height: 80px; margin-bottom: 12px; }
+
+        header h1 {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: var(--text-light);
+        }
+
+        header h1 span { color: var(--pic-gold); }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.95em;
+            margin-top: 6px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--pic-gold);
+        }
+
+        /* Forms */
+        .form-group { margin-bottom: 14px; }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85em;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .form-group .hint {
+            font-size: 0.78em;
+            color: var(--text-muted);
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+
+        input[type="text"], input[type="password"], input[type="number"], select, textarea {
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--input-bg);
+            color: var(--text-light);
+            font-family: inherit;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--pic-gold);
+            box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.2);
+        }
+
+        textarea { resize: vertical; min-height: 60px; }
+
+        select { cursor: pointer; }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        @media (max-width: 500px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        /* Checkbox row */
+        .check-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .check-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--pic-gold);
+            cursor: pointer;
+        }
+
+        .check-row label {
+            font-size: 0.9em;
+            color: var(--text-light);
+            cursor: pointer;
+            margin-bottom: 0;
+        }
+
+        /* WiFi networks */
+        .wifi-block {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+
+        .wifi-block .grid-2 { margin-bottom: 0; }
+
+        .wifi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .wifi-header strong {
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+
+        .btn-remove {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8em;
+            padding: 2px 6px;
+        }
+
+        .btn-remove:hover { color: #cc2936; }
+
+        #add-wifi-btn {
+            background: none;
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            width: 100%;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85em;
+            margin-top: 4px;
+        }
+
+        #add-wifi-btn:hover { border-color: var(--pic-gold); color: var(--pic-gold); }
+
+        /* Buttons */
+        .btn-primary {
+            display: inline-block;
+            padding: 12px 28px;
+            font-size: 1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: var(--pic-gold);
+            color: #1a1a1a;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--pic-gold-light);
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            background: none;
+            color: var(--text-light);
+            transition: all 0.2s;
+        }
+
+        .btn-outline:hover { border-color: var(--pic-gold); color: var(--pic-gold); }
+
+        .actions {
+            text-align: center;
+            margin: 24px 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Preview */
+        .preview {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px 18px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.82em;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 400px;
+            overflow-y: auto;
+            color: var(--text-light);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-muted);
+            font-size: 0.85em;
+            border-top: 1px solid var(--border-color);
+            margin-top: 24px;
+        }
+
+        footer a { color: var(--pic-gold); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        .footer-sep { margin: 0 8px; opacity: 0.3; }
+
+        /* Warning */
+        .warning {
+            background: rgba(201, 168, 76, 0.1);
+            border: 1px solid rgba(201, 168, 76, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.85em;
+            color: var(--pic-gold);
+            margin-bottom: 16px;
+        }
+
+        /* Top navigation bar */
+        .topnav {
+            background: #2a2420;
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .topnav-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            height: 56px;
+        }
+
+        .topnav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-light);
+            font-weight: 700;
+            font-size: 1.05em;
+            flex-shrink: 0;
+        }
+
+        .topnav-brand img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .topnav-links {
+            display: flex;
+            gap: 2px;
+            list-style: none;
+        }
+
+        .topnav-links a {
+            display: block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.88em;
+            font-weight: 500;
+            transition: color 0.15s, background 0.15s;
+            white-space: nowrap;
+        }
+
+        .topnav-links a:hover {
+            color: var(--text-light);
+            background: rgba(255,255,255,0.06);
+        }
+
+        .topnav-links a.active {
+            color: var(--pic-gold);
+            background: rgba(201,168,76,0.12);
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="topnav">
+        <div class="topnav-inner">
+            <a href="index.html" class="topnav-brand">
+                <img src="logo.png" alt="Pi-Clock">
+                Pi-Clock
+            </a>
+            <ul class="topnav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="manual/index.html">Manual</a></li>
+                <li><a href="config-generator.html" class="active">Configurator</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <header>
+            <h1>Config Generator</h1>
+            <p>Generate a pi-clock-config.txt file for first boot setup.<br>
+            All processing happens in your browser &mdash; nothing is sent to any server.</p>
+        </header>
+
+        <div class="warning">
+            Copy the generated file to the boot partition of your SD card as <strong>pi-clock-config.txt</strong>.
+            It will be automatically processed and securely deleted on first boot.
+        </div>
+
+        <div style="text-align:center; margin-bottom: 20px;">
+            <button class="btn-primary" id="detect-btn" onclick="detectLocation()">
+                Detect My Location
+            </button>
+            <div class="hint" style="margin-top: 6px;">
+                Uses your browser to auto-fill timezone, country, locale, and QTH coordinates
+            </div>
+        </div>
+
+        <!-- WiFi -->
+        <div class="card">
+            <div class="card-title">WiFi Configuration</div>
+            <div id="wifi-list">
+                <div class="wifi-block" data-idx="1">
+                    <div class="wifi-header">
+                        <strong>Primary Network</strong>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>SSID</label>
+                            <input type="text" class="wifi-ssid" placeholder="Your WiFi network name">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" class="wifi-pass" placeholder="WiFi password">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button id="add-wifi-btn" onclick="addWifi()">+ Add another WiFi network</button>
+
+            <div class="grid-2" style="margin-top: 14px;">
+                <div class="form-group">
+                    <label for="wifi_country">WiFi Country</label>
+                    <select id="wifi_country">
+                        <option value="AT">Austria (AT)</option>
+                        <option value="AU">Australia (AU)</option>
+                        <option value="BE">Belgium (BE)</option>
+                        <option value="BR">Brazil (BR)</option>
+                        <option value="CA">Canada (CA)</option>
+                        <option value="CH">Switzerland (CH)</option>
+                        <option value="CZ">Czech Republic (CZ)</option>
+                        <option value="DE">Germany (DE)</option>
+                        <option value="DK">Denmark (DK)</option>
+                        <option value="ES">Spain (ES)</option>
+                        <option value="FI">Finland (FI)</option>
+                        <option value="FR">France (FR)</option>
+                        <option value="GB" selected>United Kingdom (GB)</option>
+                        <option value="GR">Greece (GR)</option>
+                        <option value="HU">Hungary (HU)</option>
+                        <option value="IE">Ireland (IE)</option>
+                        <option value="IL">Israel (IL)</option>
+                        <option value="IN">India (IN)</option>
+                        <option value="IT">Italy (IT)</option>
+                        <option value="JP">Japan (JP)</option>
+                        <option value="KR">South Korea (KR)</option>
+                        <option value="MX">Mexico (MX)</option>
+                        <option value="NL">Netherlands (NL)</option>
+                        <option value="NO">Norway (NO)</option>
+                        <option value="NZ">New Zealand (NZ)</option>
+                        <option value="PL">Poland (PL)</option>
+                        <option value="PT">Portugal (PT)</option>
+                        <option value="RO">Romania (RO)</option>
+                        <option value="RU">Russia (RU)</option>
+                        <option value="SE">Sweden (SE)</option>
+                        <option value="SG">Singapore (SG)</option>
+                        <option value="US">United States (US)</option>
+                        <option value="ZA">South Africa (ZA)</option>
+                    </select>
+                    <div class="hint">Affects available WiFi channels and power limits</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Security -->
+        <div class="card">
+            <div class="card-title">User Security</div>
+            <div class="form-group">
+                <label for="user_password">Password</label>
+                <input type="password" id="user_password" value="raspberry">
+                <div class="hint">Password for the pi-clock user (used for SSH and dashboard login)</div>
+            </div>
+
+            <div class="check-row">
+                <input type="checkbox" id="enable_ssh_password" checked>
+                <label for="enable_ssh_password">Enable SSH password authentication</label>
+            </div>
+            <div class="hint" style="margin-bottom: 12px; margin-top: -4px;">
+                If unchecked, SSH access is key-only (more secure)
+            </div>
+
+            <div class="form-group">
+                <label for="ssh_key">SSH Public Key (optional)</label>
+                <textarea id="ssh_key" placeholder="ssh-rsa AAAAB3... or ssh-ed25519 AAAA... (paste your public key)"></textarea>
+                <div class="hint">Recommended for secure access without passwords</div>
+            </div>
+        </div>
+
+        <!-- System -->
+        <div class="card">
+            <div class="card-title">System Configuration</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="hostname">Hostname</label>
+                    <input type="text" id="hostname" value="pi-clock">
+                </div>
+                <div class="form-group">
+                    <label for="timezone">Timezone</label>
+                    <select id="timezone">
+                        <optgroup label="Africa">
+                            <option value="Africa/Cairo">Cairo</option>
+                            <option value="Africa/Johannesburg">Johannesburg</option>
+                            <option value="Africa/Lagos">Lagos</option>
+                            <option value="Africa/Nairobi">Nairobi</option>
+                        </optgroup>
+                        <optgroup label="Americas">
+                            <option value="America/Anchorage">Anchorage</option>
+                            <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
+                            <option value="America/Bogota">Bogota</option>
+                            <option value="America/Chicago">Chicago (Central)</option>
+                            <option value="America/Denver">Denver (Mountain)</option>
+                            <option value="America/Los_Angeles">Los Angeles (Pacific)</option>
+                            <option value="America/Mexico_City">Mexico City</option>
+                            <option value="America/New_York">New York (Eastern)</option>
+                            <option value="America/Sao_Paulo">S&atilde;o Paulo</option>
+                            <option value="America/Toronto">Toronto</option>
+                            <option value="America/Vancouver">Vancouver</option>
+                        </optgroup>
+                        <optgroup label="Asia">
+                            <option value="Asia/Dubai">Dubai</option>
+                            <option value="Asia/Hong_Kong">Hong Kong</option>
+                            <option value="Asia/Kolkata">Kolkata</option>
+                            <option value="Asia/Seoul">Seoul</option>
+                            <option value="Asia/Shanghai">Shanghai</option>
+                            <option value="Asia/Singapore">Singapore</option>
+                            <option value="Asia/Tokyo">Tokyo</option>
+                        </optgroup>
+                        <optgroup label="Europe">
+                            <option value="Europe/Amsterdam">Amsterdam</option>
+                            <option value="Europe/Athens">Athens</option>
+                            <option value="Europe/Berlin">Berlin</option>
+                            <option value="Europe/Brussels">Brussels</option>
+                            <option value="Europe/Dublin">Dublin</option>
+                            <option value="Europe/Helsinki">Helsinki</option>
+                            <option value="Europe/Istanbul">Istanbul</option>
+                            <option value="Europe/Lisbon">Lisbon</option>
+                            <option value="Europe/London" selected>London</option>
+                            <option value="Europe/Madrid">Madrid</option>
+                            <option value="Europe/Moscow">Moscow</option>
+                            <option value="Europe/Oslo">Oslo</option>
+                            <option value="Europe/Paris">Paris</option>
+                            <option value="Europe/Prague">Prague</option>
+                            <option value="Europe/Rome">Rome</option>
+                            <option value="Europe/Stockholm">Stockholm</option>
+                            <option value="Europe/Vienna">Vienna</option>
+                            <option value="Europe/Warsaw">Warsaw</option>
+                            <option value="Europe/Zurich">Zurich</option>
+                        </optgroup>
+                        <optgroup label="Oceania">
+                            <option value="Australia/Adelaide">Adelaide</option>
+                            <option value="Australia/Brisbane">Brisbane</option>
+                            <option value="Australia/Melbourne">Melbourne</option>
+                            <option value="Australia/Perth">Perth</option>
+                            <option value="Australia/Sydney">Sydney</option>
+                            <option value="Pacific/Auckland">Auckland</option>
+                            <option value="Pacific/Fiji">Fiji</option>
+                            <option value="Pacific/Honolulu">Honolulu</option>
+                        </optgroup>
+                        <optgroup label="UTC">
+                            <option value="UTC">UTC</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="locale">Locale</label>
+                    <select id="locale">
+                        <option value="cs_CZ.UTF-8">Czech (cs_CZ)</option>
+                        <option value="da_DK.UTF-8">Danish (da_DK)</option>
+                        <option value="de_DE.UTF-8">German (de_DE)</option>
+                        <option value="el_GR.UTF-8">Greek (el_GR)</option>
+                        <option value="en_AU.UTF-8">English - Australia (en_AU)</option>
+                        <option value="en_CA.UTF-8">English - Canada (en_CA)</option>
+                        <option value="en_GB.UTF-8" selected>English - UK (en_GB)</option>
+                        <option value="en_IE.UTF-8">English - Ireland (en_IE)</option>
+                        <option value="en_NZ.UTF-8">English - New Zealand (en_NZ)</option>
+                        <option value="en_US.UTF-8">English - US (en_US)</option>
+                        <option value="en_ZA.UTF-8">English - South Africa (en_ZA)</option>
+                        <option value="es_ES.UTF-8">Spanish (es_ES)</option>
+                        <option value="fi_FI.UTF-8">Finnish (fi_FI)</option>
+                        <option value="fr_FR.UTF-8">French (fr_FR)</option>
+                        <option value="hu_HU.UTF-8">Hungarian (hu_HU)</option>
+                        <option value="it_IT.UTF-8">Italian (it_IT)</option>
+                        <option value="ja_JP.UTF-8">Japanese (ja_JP)</option>
+                        <option value="ko_KR.UTF-8">Korean (ko_KR)</option>
+                        <option value="nb_NO.UTF-8">Norwegian (nb_NO)</option>
+                        <option value="nl_NL.UTF-8">Dutch (nl_NL)</option>
+                        <option value="pl_PL.UTF-8">Polish (pl_PL)</option>
+                        <option value="pt_BR.UTF-8">Portuguese - Brazil (pt_BR)</option>
+                        <option value="pt_PT.UTF-8">Portuguese (pt_PT)</option>
+                        <option value="ro_RO.UTF-8">Romanian (ro_RO)</option>
+                        <option value="ru_RU.UTF-8">Russian (ru_RU)</option>
+                        <option value="sv_SE.UTF-8">Swedish (sv_SE)</option>
+                        <option value="zh_CN.UTF-8">Chinese - Simplified (zh_CN)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="display_resolution">Display Resolution</label>
+                    <select id="display_resolution">
+                        <option value="720p">720p (1280x720)</option>
+                        <option value="1080p" selected>1080p (1920x1080)</option>
+                        <option value="1440p">1440p (2560x1440)</option>
+                        <option value="4k">4K (3840x2160)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ham Radio -->
+        <div class="card">
+            <div class="card-title">Ham Radio Settings</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="callsign">Callsign</label>
+                    <input type="text" id="callsign" placeholder="e.g. M1ABC" style="text-transform:uppercase">
+                </div>
+                <div class="form-group">
+                    <label for="grid_square">Grid Square</label>
+                    <input type="text" id="grid_square" placeholder="e.g. IO91wm">
+                    <div class="hint">Auto-calculated from lat/lon if left blank</div>
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="qth_lat">QTH Latitude</label>
+                    <input type="number" id="qth_lat" placeholder="51.5074" step="0.0001">
+                </div>
+                <div class="form-group">
+                    <label for="qth_lon">QTH Longitude</label>
+                    <input type="number" id="qth_lon" placeholder="-0.1278" step="0.0001">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="center_lon">Map Center Longitude</label>
+                <input type="number" id="center_lon" placeholder="0" step="0.1" value="0">
+                <div class="hint">Shift the map left/right to centre on your region (-180 to 180)</div>
+            </div>
+        </div>
+
+        <!-- Preview & Download -->
+        <div class="card">
+            <div class="card-title">Generated Configuration</div>
+            <div class="preview" id="preview"></div>
+        </div>
+
+        <div class="actions">
+            <button class="btn-primary" onclick="download()">Download pi-clock-config.txt</button>
+            <button class="btn-outline" onclick="copyToClipboard()">Copy to Clipboard</button>
+        </div>
+
+        <footer>
+            <p style="margin-bottom: 6px;">Built with &#10084;&#65039; for the Amateur Radio community by Andy Taylor (MW0MWZ)</p>
+            <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+            <p style="margin-top: 6px;">
+                <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+                <span class="footer-sep">&middot;</span>
+                <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+                <span class="footer-sep">&middot;</span>
+                <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+            </p>
+        </footer>
+
+    </div>
+
+    <script>
+    /* Country code to WiFi country / locale mapping.
+     * Used by detectLocation() to set dropdowns from browser timezone. */
+    var tzCountryMap = {
+        'Africa/Cairo': 'EG', 'Africa/Johannesburg': 'ZA', 'Africa/Lagos': 'NG',
+        'Africa/Nairobi': 'KE',
+        'America/Anchorage': 'US', 'America/Argentina/Buenos_Aires': 'AR',
+        'America/Bogota': 'CO', 'America/Chicago': 'US', 'America/Denver': 'US',
+        'America/Los_Angeles': 'US', 'America/Mexico_City': 'MX',
+        'America/New_York': 'US', 'America/Sao_Paulo': 'BR',
+        'America/Toronto': 'CA', 'America/Vancouver': 'CA',
+        'Asia/Dubai': 'AE', 'Asia/Hong_Kong': 'HK', 'Asia/Kolkata': 'IN',
+        'Asia/Seoul': 'KR', 'Asia/Shanghai': 'CN', 'Asia/Singapore': 'SG',
+        'Asia/Tokyo': 'JP',
+        'Australia/Adelaide': 'AU', 'Australia/Brisbane': 'AU',
+        'Australia/Melbourne': 'AU', 'Australia/Perth': 'AU',
+        'Australia/Sydney': 'AU',
+        'Europe/Amsterdam': 'NL', 'Europe/Athens': 'GR', 'Europe/Berlin': 'DE',
+        'Europe/Brussels': 'BE', 'Europe/Dublin': 'IE', 'Europe/Helsinki': 'FI',
+        'Europe/Istanbul': 'TR', 'Europe/Lisbon': 'PT', 'Europe/London': 'GB',
+        'Europe/Madrid': 'ES', 'Europe/Moscow': 'RU', 'Europe/Oslo': 'NO',
+        'Europe/Paris': 'FR', 'Europe/Prague': 'CZ', 'Europe/Rome': 'IT',
+        'Europe/Stockholm': 'SE', 'Europe/Vienna': 'AT', 'Europe/Warsaw': 'PL',
+        'Europe/Zurich': 'CH',
+        'Pacific/Auckland': 'NZ', 'Pacific/Fiji': 'FJ', 'Pacific/Honolulu': 'US'
+    };
+
+    var countryLocaleMap = {
+        'AT': 'de_DE.UTF-8', 'AU': 'en_AU.UTF-8', 'BE': 'nl_NL.UTF-8',
+        'BR': 'pt_BR.UTF-8', 'CA': 'en_CA.UTF-8', 'CH': 'de_DE.UTF-8',
+        'CN': 'zh_CN.UTF-8', 'CZ': 'cs_CZ.UTF-8', 'DE': 'de_DE.UTF-8',
+        'DK': 'da_DK.UTF-8', 'ES': 'es_ES.UTF-8', 'FI': 'fi_FI.UTF-8',
+        'FR': 'fr_FR.UTF-8', 'GB': 'en_GB.UTF-8', 'GR': 'el_GR.UTF-8',
+        'HU': 'hu_HU.UTF-8', 'IE': 'en_IE.UTF-8', 'IL': 'en_US.UTF-8',
+        'IN': 'en_GB.UTF-8', 'IT': 'it_IT.UTF-8', 'JP': 'ja_JP.UTF-8',
+        'KR': 'ko_KR.UTF-8', 'MX': 'es_ES.UTF-8', 'NL': 'nl_NL.UTF-8',
+        'NO': 'nb_NO.UTF-8', 'NZ': 'en_NZ.UTF-8', 'PL': 'pl_PL.UTF-8',
+        'PT': 'pt_PT.UTF-8', 'RO': 'ro_RO.UTF-8', 'RU': 'ru_RU.UTF-8',
+        'SE': 'sv_SE.UTF-8', 'SG': 'en_GB.UTF-8', 'US': 'en_US.UTF-8',
+        'ZA': 'en_ZA.UTF-8'
+    };
+
+    function setSelect(id, value) {
+        var sel = document.getElementById(id);
+        if (!sel) return false;
+        for (var i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === value) {
+                sel.selectedIndex = i;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function detectLocation() {
+        var btn = document.getElementById('detect-btn');
+        var origText = btn.textContent;
+        btn.textContent = 'Detecting...';
+        btn.disabled = true;
+
+        /* Step 1: Get timezone from browser — this always works, no permissions needed */
+        var browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (browserTz) {
+            setSelect('timezone', browserTz);
+
+            /* Derive country and locale from timezone */
+            var country = tzCountryMap[browserTz];
+            if (country) {
+                setSelect('wifi_country', country);
+                var locale = countryLocaleMap[country];
+                if (locale) setSelect('locale', locale);
+            }
+        }
+
+        /* Step 2: Get coordinates from Geolocation API — requires user permission */
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(pos) {
+                    document.getElementById('qth_lat').value = pos.coords.latitude.toFixed(4);
+                    document.getElementById('qth_lon').value = pos.coords.longitude.toFixed(4);
+
+                    /* Set map centre to user's longitude */
+                    document.getElementById('center_lon').value = Math.round(pos.coords.longitude);
+
+                    btn.textContent = 'Location detected';
+                    btn.disabled = false;
+                    setTimeout(function() { btn.textContent = origText; }, 3000);
+                    updatePreview();
+                },
+                function(err) {
+                    /* Geolocation denied or failed — timezone/country still set */
+                    btn.textContent = 'Timezone set (location denied)';
+                    btn.disabled = false;
+                    setTimeout(function() { btn.textContent = origText; }, 3000);
+                    updatePreview();
+                },
+                { timeout: 10000 }
+            );
+        } else {
+            btn.textContent = 'Timezone set (no GPS)';
+            btn.disabled = false;
+            setTimeout(function() { btn.textContent = origText; }, 3000);
+            updatePreview();
+        }
+    }
+
+    var wifiCount = 1;
+
+    function addWifi() {
+        wifiCount++;
+        var list = document.getElementById('wifi-list');
+        var block = document.createElement('div');
+        block.className = 'wifi-block';
+        block.dataset.idx = wifiCount;
+        block.innerHTML =
+            '<div class="wifi-header">' +
+            '  <strong>Network ' + wifiCount + '</strong>' +
+            '  <button class="btn-remove" onclick="removeWifi(this)">&times; Remove</button>' +
+            '</div>' +
+            '<div class="grid-2">' +
+            '  <div class="form-group">' +
+            '    <label>SSID</label>' +
+            '    <input type="text" class="wifi-ssid" placeholder="Network name">' +
+            '  </div>' +
+            '  <div class="form-group">' +
+            '    <label>Password</label>' +
+            '    <input type="password" class="wifi-pass" placeholder="Password">' +
+            '  </div>' +
+            '</div>';
+        list.appendChild(block);
+        updatePreview();
+    }
+
+    function removeWifi(btn) {
+        btn.closest('.wifi-block').remove();
+        updatePreview();
+    }
+
+    function val(id) {
+        var el = document.getElementById(id);
+        if (!el) return '';
+        if (el.type === 'checkbox') return el.checked;
+        return el.value.trim();
+    }
+
+    function generate() {
+        var lines = [];
+        lines.push('# Pi-Clock Boot Configuration');
+        lines.push('# Generated by Pi-Clock Config Generator');
+        lines.push('# Copy to boot partition as pi-clock-config.txt');
+        lines.push('# WARNING: This file will be DELETED after processing!');
+        lines.push('');
+
+        /* WiFi */
+        var blocks = document.querySelectorAll('.wifi-block');
+        var hasWifi = false;
+        lines.push('# === WIFI CONFIGURATION ===');
+
+        blocks.forEach(function(block, i) {
+            var ssid = block.querySelector('.wifi-ssid').value.trim();
+            var pass = block.querySelector('.wifi-pass').value.trim();
+            if (ssid) {
+                hasWifi = true;
+                if (i === 0) {
+                    lines.push('wifi_ssid=' + ssid);
+                    if (pass) lines.push('wifi_password=' + pass);
+                } else {
+                    var n = i + 1;
+                    lines.push('wifi_ssid_' + n + '=' + ssid);
+                    if (pass) lines.push('wifi_password_' + n + '=' + pass);
+                }
+            }
+        });
+
+        if (!hasWifi) {
+            lines.push('#wifi_ssid=YourNetwork');
+            lines.push('#wifi_password=YourPassword');
+        }
+
+        var country = val('wifi_country').toUpperCase() || 'GB';
+        lines.push('wifi_country=' + country);
+        lines.push('');
+
+        /* User security */
+        lines.push('# === USER SECURITY ===');
+        var pw = val('user_password') || 'raspberry';
+        lines.push('user_password=' + pw);
+        lines.push('enable_ssh_password=' + (val('enable_ssh_password') ? 'true' : 'false'));
+
+        var sshKey = val('ssh_key');
+        if (sshKey) {
+            sshKey.split('\n').forEach(function(k) {
+                k = k.trim();
+                if (k) lines.push('ssh_key=' + k);
+            });
+        }
+        lines.push('');
+
+        /* System */
+        lines.push('# === SYSTEM CONFIGURATION ===');
+        lines.push('hostname=' + (val('hostname') || 'pi-clock'));
+        lines.push('timezone=' + (val('timezone') || 'Europe/London'));
+        lines.push('locale=' + (val('locale') || 'en_GB.UTF-8'));
+        lines.push('');
+
+        /* Display */
+        lines.push('# === DISPLAY SETTINGS ===');
+        lines.push('display_resolution=' + (val('display_resolution') || '1080p'));
+        lines.push('');
+
+        /* Ham radio */
+        var callsign = val('callsign');
+        var grid = val('grid_square');
+        var lat = val('qth_lat');
+        var lon = val('qth_lon');
+        var clon = val('center_lon');
+
+        lines.push('# === HAM RADIO SETTINGS ===');
+        if (callsign) lines.push('callsign=' + callsign.toUpperCase());
+        else lines.push('#callsign=M1ABC');
+        if (grid) lines.push('grid_square=' + grid);
+        else lines.push('#grid_square=IO91wm');
+        if (lat) lines.push('qth_lat=' + lat);
+        else lines.push('#qth_lat=51.5074');
+        if (lon) lines.push('qth_lon=' + lon);
+        else lines.push('#qth_lon=-0.1278');
+        if (clon && clon !== '0') lines.push('center_lon=' + clon);
+        else lines.push('#center_lon=0');
+        lines.push('');
+
+        return lines.join('\n');
+    }
+
+    function updatePreview() {
+        document.getElementById('preview').textContent = generate();
+    }
+
+    function download() {
+        var content = generate();
+        var blob = new Blob([content], {type: 'text/plain'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'pi-clock-config.txt';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    function copyToClipboard() {
+        navigator.clipboard.writeText(generate()).then(function() {
+            var btn = document.querySelector('.btn-outline');
+            var orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = orig; }, 2000);
+        });
+    }
+
+    /* Live preview — update on any input change */
+    document.addEventListener('input', updatePreview);
+    document.addEventListener('change', updatePreview);
+    updatePreview();
+    </script>
+</body>
+</html>

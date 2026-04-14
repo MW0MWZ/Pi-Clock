@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Installation &amp; OS - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html" class="active">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Installation &amp; OS Architecture</h1>
+        <p class="subtitle">How Pi-Clock OS is built, how it boots, how it upgrades, and how your configuration persists.</p>
+    </div>
+
+    <!-- ─── SD Card Image Install ──────────────────────────────── -->
+    <h2>Installing from an SD Card Image</h2>
+
+    <p>The recommended way to install Pi-Clock is to flash the pre-built OS image to an SD card. The image contains the complete operating system, renderer, dashboard, and maps.</p>
+
+    <h3>Requirements</h3>
+
+    <ul>
+        <li>A micro SD card (4 GB minimum)</li>
+        <li>A computer with an SD card reader</li>
+        <li>An imaging tool: <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a>, <a href="https://etcher.balena.io/">balenaEtcher</a>, or <code>dd</code></li>
+    </ul>
+
+    <h3>Flashing the Image</h3>
+
+    <p>Download the latest <code>.img.xz</code> file from the <a href="../index.html">Pi-Clock home page</a> and write it to the SD card:</p>
+
+<pre><code><span class="comment"># Using Raspberry Pi Imager: select "Use custom" and choose the .img.xz file</span>
+
+<span class="comment"># Using dd on Linux/macOS (replace /dev/sdX with your SD card device)</span>
+xzcat pi-clock-os-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+sync</code></pre>
+
+    <div class="callout callout-warning">
+        <p><strong>Double-check the target device!</strong> The <code>dd</code> command will overwrite the entire device without confirmation. Use <code>lsblk</code> (Linux) or <code>diskutil list</code> (macOS) to identify the correct SD card device.</p>
+    </div>
+
+    <!-- ─── APK Install ────────────────────────────────────────── -->
+    <h2>Installing via APK Packages</h2>
+
+    <p>If you already have an Alpine Linux system (or RasPINE), you can install Pi-Clock as individual APK packages without reflashing the SD card.</p>
+
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+                <h4>Add the signing key</h4>
+<pre><code>wget -O /etc/apk/keys/pi-clock-apk-signing.rsa.pub \
+    https://pi-clock.pistar.uk/pi-clock-apk-signing.rsa.pub</code></pre>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+                <h4>Add the repository</h4>
+<pre><code>echo "https://pi-clock.pistar.uk/v3.21/pi-clock" \
+    >> /etc/apk/repositories</code></pre>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+                <h4>Install the packages</h4>
+<pre><code>apk update
+apk add pi-clock-maps pi-clock-renderer pi-clock-dashboard</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── OS Architecture ────────────────────────────────────── -->
+    <h2>Operating System Architecture</h2>
+
+    <p>Pi-Clock runs on <strong>RasPINE</strong> &mdash; a custom OS based on the Raspberry Pi OS kernel and modules combined with an Alpine Linux userland (musl libc, apk package manager). This gives the best hardware support (Raspberry Pi Foundation's kernel) with the smallest possible footprint (Alpine is typically 50&ndash;100 MB for a full system).</p>
+
+    <h3>SD Card Layout</h3>
+
+    <p>The SD card is divided into four partitions:</p>
+
+    <div class="diagram">P1: /boot/firmware    256 MB    FAT32    Kernel, firmware, config files
+P2: Slot A            1.5 GB    ext4     Root filesystem (active OR inactive)
+P3: Slot B            1.5 GB    ext4     Root filesystem (active OR inactive)
+P4: /data             grows     ext4     Persistent data (auto-expands first boot)</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Partition</th>
+                <th>Mount Point</th>
+                <th>Purpose</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>P1</strong> (boot)</td>
+                <td><code>/boot/firmware</code></td>
+                <td>FAT32 &mdash; kernel, device tree files, firmware, <code>config.txt</code>, <code>cmdline.txt</code>, <code>slot.conf</code>, and <code>pi-clock-config.txt</code>. This partition is accessible from any computer (just insert the SD card).</td>
+            </tr>
+            <tr>
+                <td><strong>P2</strong> (Slot A)</td>
+                <td><code>/</code> (when active)</td>
+                <td>ext4 &mdash; complete root filesystem. One of the two A/B upgrade slots.</td>
+            </tr>
+            <tr>
+                <td><strong>P3</strong> (Slot B)</td>
+                <td><code>/</code> (when active)</td>
+                <td>ext4 &mdash; complete root filesystem. The other A/B upgrade slot.</td>
+            </tr>
+            <tr>
+                <td><strong>P4</strong> (data)</td>
+                <td><code>/data</code></td>
+                <td>ext4 &mdash; persistent data that survives OS upgrades. Configuration files, SSH keys, WiFi credentials, and user home directory. Auto-expands to fill the SD card on first boot.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- ─── Boot Process ───────────────────────────────────────── -->
+    <h2>Boot Process</h2>
+
+    <p>The boot sequence runs through three OpenRC runlevels:</p>
+
+    <h3>1. sysinit (Immediate)</h3>
+    <ul>
+        <li><strong>pi-clock-splash</strong> &mdash; displays the Pi-Clock logo directly to the framebuffer, suppresses kernel messages, and switches to a dedicated virtual terminal. This ensures the display shows something immediately rather than a blank screen or scrolling boot text.</li>
+    </ul>
+
+    <h3>2. boot (System Setup)</h3>
+    <ul>
+        <li><strong>pi-clock-data-resize</strong> &mdash; on first boot only, expands the <code>/data</code> partition (P4) to fill the entire SD card. This is a two-phase process: the partition table is updated first (requires a reboot), then the filesystem is grown to match. The service disables itself after completion.</li>
+        <li><strong>pi-clock-bindmounts</strong> &mdash; bind-mounts directories from <code>/data/etc/</code> over their corresponding <code>/etc/</code> locations. This is how configuration persists across OS upgrades &mdash; the rootfs is replaced, but <code>/data</code> is untouched.</li>
+        <li><strong>pi-clock-config</strong> &mdash; processes the <a href="#zero-touch">zero-touch configuration</a> file on first boot, or applies saved settings from <code>/data/etc/pi-clock-user.conf</code> on subsequent boots.</li>
+        <li><strong>pi-clock-boot-watchdog</strong> &mdash; if an upgrade is pending (PENDING=true in slot.conf), increments the boot attempt counter. After three consecutive failed boots, automatically rolls back to the previous OS slot.</li>
+        <li>Standard services: networking, DHCP, wpa_supplicant (WiFi), Dropbear (SSH)</li>
+    </ul>
+
+    <h3>3. default (Application Services)</h3>
+    <ul>
+        <li><strong>pi-clock-health-check</strong> &mdash; waits 30 seconds, then checks if the renderer is running or the network is up. If either check passes, the upgrade is marked as successful (PENDING cleared). If both fail, the slot remains pending and will be rolled back after three total failed boots.</li>
+        <li><strong>pi-clock-renderer</strong> &mdash; detects the display resolution (from the framebuffer or user override) and starts the full-screen map renderer.</li>
+        <li><strong>pi-clock-dashboard</strong> &mdash; starts the web management UI on HTTPS port 443.</li>
+    </ul>
+
+    <div class="callout callout-info">
+        <p><strong>Boot times:</strong> First boot takes approximately 60 seconds due to the partition resize and reboot. Subsequent boots take 20&ndash;35 seconds depending on your Pi model. The splash screen is visible almost immediately.</p>
+    </div>
+
+    <!-- ─── A/B Upgrades ──────────────────────────────────────── -->
+    <h2>A/B Slot Upgrades</h2>
+
+    <p>Pi-Clock uses an A/B slot upgrade system inspired by Android and ChromeOS. The two root filesystem partitions (Slot A and Slot B) alternate roles: one is the active system, the other holds the previous version or receives the next upgrade.</p>
+
+    <h3>How an Upgrade Works</h3>
+
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+                <h4>Download</h4>
+                <p>A new rootfs image is downloaded to the <strong>inactive</strong> slot. The running system is untouched during this process.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+                <h4>Verify</h4>
+                <p>The downloaded image is verified against a SHA256 checksum before installation.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+                <h4>Install</h4>
+                <p>The inactive slot is formatted and the new rootfs is extracted. The boot configuration is updated to point to the new slot, and PENDING is set to true.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+                <h4>Reboot</h4>
+                <p>The system reboots into the new slot. The boot watchdog begins counting attempts.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+                <h4>Validate</h4>
+                <p>After 30 seconds, the health check confirms the renderer is running or the network is up. If successful, PENDING is cleared and the upgrade is complete.</p>
+            </div>
+        </div>
+    </div>
+
+    <h3>Automatic Rollback</h3>
+
+    <p>If the new slot fails to boot successfully three times in a row (the renderer is not running <em>and</em> the network is not up), the boot watchdog automatically rolls back to the previous slot and reboots. This ensures that a bad upgrade can never permanently brick your Pi-Clock.</p>
+
+    <div class="callout callout-success">
+        <p><strong>Safe upgrades:</strong> Your configuration, WiFi credentials, SSH keys, and all settings are stored on the <code>/data</code> partition and are completely unaffected by rootfs upgrades. You never need to reconfigure after an upgrade.</p>
+    </div>
+
+    <h3>Manual Rollback</h3>
+
+    <p>You can manually roll back to the previous slot from the dashboard (System page) or via SSH:</p>
+
+<pre><code>pi-clock-rollback        <span class="comment"># Switch boot to previous slot (requires manual reboot)</span>
+pi-clock-rollback --force <span class="comment"># Switch and reboot immediately</span></code></pre>
+
+    <!-- ─── Persistence ────────────────────────────────────────── -->
+    <h2>Persistence Across Upgrades</h2>
+
+    <p>The <code>/data</code> partition (P4) survives all OS upgrades. Pi-Clock uses bind mounts to overlay persistent configuration from <code>/data/etc/</code> over the rootfs <code>/etc/</code> directories at boot time.</p>
+
+    <h3>What Persists</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Location</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>All Pi-Clock config</td>
+                <td><code>/data/etc/pi-clock-*.conf</code></td>
+            </tr>
+            <tr>
+                <td>WiFi credentials</td>
+                <td><code>/data/etc/wpa_supplicant/</code></td>
+            </tr>
+            <tr>
+                <td>SSH host keys</td>
+                <td><code>/data/etc/dropbear/</code></td>
+            </tr>
+            <tr>
+                <td>User home directory</td>
+                <td><code>/data/home/pi-clock/</code></td>
+            </tr>
+            <tr>
+                <td>User password &amp; hostname</td>
+                <td><code>/data/etc/pi-clock-user.conf</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>What Does NOT Persist</h3>
+
+    <ul>
+        <li><code>/tmp</code> &mdash; mounted as tmpfs (RAM), cleared on every reboot</li>
+        <li><code>/var/log</code> &mdash; mounted as tmpfs, logs are lost on reboot (reduces SD card wear)</li>
+        <li>Anything installed manually on the rootfs (P2/P3) &mdash; replaced on upgrade</li>
+    </ul>
+
+    <!-- ─── Zero-Touch Config ──────────────────────────────────── -->
+    <h2 id="zero-touch">Zero-Touch Configuration</h2>
+
+    <p>You can pre-configure Pi-Clock before first boot by placing a file called <code>pi-clock-config.txt</code> on the boot partition (P1, FAT32). This is the same partition visible when you insert the SD card into any computer.</p>
+
+    <p>The file uses a simple <code>key=value</code> format, one setting per line. Comments start with <code>#</code>.</p>
+
+    <h3>Available Settings</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Key</th>
+                <th>Description</th>
+                <th>Example</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>wifi_ssid</code></td>
+                <td>WiFi network name</td>
+                <td><code>MyNetwork</code></td>
+            </tr>
+            <tr>
+                <td><code>wifi_password</code></td>
+                <td>WiFi password (WPA2, 8&ndash;63 characters)</td>
+                <td><code>MySecretKey</code></td>
+            </tr>
+            <tr>
+                <td><code>wifi_country</code></td>
+                <td>WiFi regulatory domain (2-letter ISO code)</td>
+                <td><code>GB</code>, <code>US</code>, <code>DE</code></td>
+            </tr>
+            <tr>
+                <td><code>hostname</code></td>
+                <td>System hostname</td>
+                <td><code>shack-clock</code></td>
+            </tr>
+            <tr>
+                <td><code>user_password</code></td>
+                <td>Set the dashboard login password</td>
+                <td><code>MyPassword123</code></td>
+            </tr>
+            <tr>
+                <td><code>timezone</code></td>
+                <td>Timezone (Olson format)</td>
+                <td><code>Europe/London</code></td>
+            </tr>
+            <tr>
+                <td><code>callsign</code></td>
+                <td>Your amateur radio callsign</td>
+                <td><code>M1ABC</code></td>
+            </tr>
+            <tr>
+                <td><code>qth_lat</code></td>
+                <td>QTH latitude (-90 to 90)</td>
+                <td><code>51.5</code></td>
+            </tr>
+            <tr>
+                <td><code>qth_lon</code></td>
+                <td>QTH longitude (-180 to 180)</td>
+                <td><code>-0.1</code></td>
+            </tr>
+            <tr>
+                <td><code>grid_square</code></td>
+                <td>Maidenhead grid square</td>
+                <td><code>IO91wm</code></td>
+            </tr>
+            <tr>
+                <td><code>center_lon</code></td>
+                <td>Map center longitude (-180 to 180)</td>
+                <td><code>0.0</code></td>
+            </tr>
+            <tr>
+                <td><code>display_resolution</code></td>
+                <td>Display resolution</td>
+                <td><code>1080p</code>, <code>4k</code>, <code>native</code></td>
+            </tr>
+            <tr>
+                <td><code>enable_ssh_password</code></td>
+                <td>Allow SSH password login (default: key-only)</td>
+                <td><code>true</code></td>
+            </tr>
+            <tr>
+                <td><code>ssh_key</code></td>
+                <td>SSH public key to authorize</td>
+                <td><code>ssh-ed25519 AAAA...</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Multiple WiFi Networks</h3>
+
+    <p>You can configure up to 10 WiFi networks with numbered suffixes. Higher-numbered networks are tried first (priority):</p>
+
+<pre><code>wifi_ssid_1=HomeNetwork
+wifi_password_1=HomePassword
+wifi_ssid_2=ShackNetwork
+wifi_password_2=ShackPassword</code></pre>
+
+    <div class="callout callout-warning">
+        <p><strong>Security:</strong> The <code>pi-clock-config.txt</code> file is automatically deleted after processing because it may contain passwords in plain text. The password is hashed and stored securely in <code>/data/etc/pi-clock-user.conf</code>.</p>
+    </div>
+
+    <!-- ─── SSH Access ─────────────────────────────────────────── -->
+    <h2>SSH Access</h2>
+
+    <p>Pi-Clock runs Dropbear (a lightweight SSH server) on port 22. By default, only key-based authentication is enabled for security.</p>
+
+    <h3>Connecting via SSH</h3>
+
+<pre><code>ssh pi-clock@pi-clock.local</code></pre>
+
+    <h3>Enabling Password Authentication</h3>
+
+    <p>If you need password-based SSH access (not recommended for production), set <code>enable_ssh_password=true</code> in <code>pi-clock-config.txt</code> before first boot, or change it via the dashboard.</p>
+
+    <h3>Adding SSH Keys</h3>
+
+    <p>Add your SSH public key via <code>pi-clock-config.txt</code>:</p>
+
+<pre><code>ssh_key=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample... user@host</code></pre>
+
+    <p>Or copy it manually after first boot:</p>
+
+<pre><code>ssh-copy-id pi-clock@pi-clock.local</code></pre>
+
+    <!-- ─── SD Card Wear ──────────────────────────────────────── -->
+    <h2>SD Card Longevity</h2>
+
+    <p>Pi-Clock is designed to minimise SD card writes:</p>
+
+    <ul>
+        <li><code>/tmp</code> and <code>/var/log</code> are mounted as tmpfs (RAM) &mdash; no disk writes for temporary files or logs</li>
+        <li>Configuration changes are written atomically (temp file, sync, rename) to prevent corruption on power loss</li>
+        <li>The renderer only writes to disk when configuration changes, not during normal operation</li>
+        <li>Use a high-endurance SD card (Samsung PRO Endurance or similar) for best results</li>
+    </ul>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="quick-start.html">
+            <span class="label">Previous</span>
+            <span class="title">Quick Start</span>
+        </a>
+        <a href="display.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Display Layers</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

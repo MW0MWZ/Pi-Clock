@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi-Clock - Open Source Ham Radio World Clock</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --pic-gold: #c9a84c;
+            --pic-gold-light: #dbb85c;
+            --pic-accent: #c9a84c;
+            --pic-green: #5a9e4a;
+            --pic-red: #cc2936;
+            --text-light: #e8e0d4;
+            --text-muted: #9a8e80;
+            --bg-dark: #2e2c2a;
+            --bg-card: #3a3a3a;
+            --border-color: #504a46;
+            --code-bg: #333030;
+            --renderer-color: #c9a84c;
+            --dashboard-color: #5a9e4a;
+            --maps-color: #cc2936;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #2a2826 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ── Header ──────────────────────────────────────────── */
+        header {
+            padding: 40px;
+            background: linear-gradient(135deg, #2a2420 0%, #3a3a3a 50%, #2a2420 100%);
+            border-radius: 20px;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.08) 0%, transparent 60%);
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .logo {
+            width: 160px;
+            height: 160px;
+            flex-shrink: 0;
+            animation: float-logo 4s ease-in-out infinite;
+        }
+
+        @keyframes float-logo {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .header-text {
+            flex: 1;
+        }
+
+        h1 {
+            font-size: 2.8em;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        h1 span {
+            color: var(--pic-gold);
+        }
+
+        .tagline {
+            font-size: 1.2em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            .badges { justify-content: center; }
+            .logo { width: 120px; height: 120px; }
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 14px;
+            font-size: 0.85em;
+            font-weight: 600;
+            border-radius: 20px;
+            background: rgba(201,168,76,0.12);
+            color: var(--pic-gold);
+            border: 1px solid rgba(201,168,76,0.25);
+        }
+
+        .badge.gold {
+            background: rgba(201,168,76,0.18);
+            color: var(--pic-gold-light);
+            border-color: rgba(201,168,76,0.3);
+        }
+
+        .badge.green {
+            background: rgba(90,158,74,0.12);
+            color: var(--pic-green);
+            border-color: rgba(90,158,74,0.25);
+        }
+
+        /* ── Section titles ──────────────────────────────────── */
+        .section-title {
+            font-size: 1.6em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(201,168,76,0.3);
+        }
+
+        /* ── Feature grid ────────────────────────────────────── */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+        }
+
+        .feature-icon {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.1em;
+            margin-bottom: 6px;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.95em;
+        }
+
+        /* ── Quick start ─────────────────────────────────────── */
+        .quick-start {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 40px;
+        }
+
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 16px;
+        }
+
+        .step {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .step-num {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--pic-gold);
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.95em;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-content h4 {
+            margin-bottom: 6px;
+        }
+
+        .step-content p {
+            color: var(--text-muted);
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            border-radius: 8px;
+            padding: 14px 18px;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.88em;
+            line-height: 1.7;
+            overflow-x: auto;
+            position: relative;
+            border: 1px solid rgba(201,168,76,0.1);
+        }
+
+        .code-block .comment {
+            color: #6c7a89;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        /* ── Package cards ────────────────────────────────────── */
+        .packages {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .package-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            border-top: 3px solid;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .package-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+        }
+
+        .package-card.renderer { border-top-color: var(--renderer-color); }
+        .package-card.dashboard { border-top-color: var(--dashboard-color); }
+        .package-card.maps { border-top-color: var(--maps-color); }
+
+        .package-name {
+            font-family: monospace;
+            font-size: 1.05em;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .package-card.renderer .package-name { color: var(--renderer-color); }
+        .package-card.dashboard .package-name { color: var(--dashboard-color); }
+        .package-card.maps .package-name { color: var(--maps-color); }
+
+        .package-desc {
+            color: var(--text-muted);
+            font-size: 0.92em;
+            margin-bottom: 12px;
+        }
+
+        .package-deps {
+            font-size: 0.82em;
+            color: var(--text-muted);
+        }
+
+        .package-deps code {
+            background: rgba(255,255,255,0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.95em;
+        }
+
+        /* ── Links ────────────────────────────────────────────── */
+        .links {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+        }
+
+        .link-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95em;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .link-btn.primary {
+            background: var(--pic-accent);
+            color: #1a1a1a;
+            font-weight: 700;
+        }
+
+        .link-btn.primary:hover {
+            background: var(--pic-gold-light);
+            color: #1a1a1a;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(201,168,76,0.3);
+        }
+
+        .link-btn.outline {
+            background: transparent;
+            color: var(--text-light);
+            border: 1px solid var(--border-color);
+        }
+
+        .link-btn.outline:hover {
+            border-color: var(--pic-gold);
+            color: var(--pic-gold);
+            transform: translateY(-2px);
+        }
+
+        /* ── Footer ──────────────────────────────────────────── */
+        footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-muted);
+            font-size: 0.85em;
+            border-top: 1px solid var(--border-color);
+        }
+
+        footer a {
+            color: var(--pic-gold);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footer-sep {
+            margin: 0 8px;
+            opacity: 0.3;
+        }
+
+        /* ── Responsive ──────────────────────────────────────── */
+        @media (max-width: 768px) {
+            header { padding: 24px 16px; }
+            h1 { font-size: 2em; }
+            .features, .packages { grid-template-columns: 1fr; }
+            .code-block { font-size: 0.8em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <img src="logo.png" alt="Pi-Clock" class="logo">
+                <div class="header-text">
+                    <h1>Pi-<span>Clock</span></h1>
+                    <p class="tagline">Open source ham radio world clock for Raspberry Pi</p>
+                    <div class="badges">
+                        <span class="badge">GPL-2.0</span>
+                        <span class="badge gold">Raspberry Pi</span>
+                        <a href="https://raspine.org" target="_blank" rel="noopener" class="badge green" style="text-decoration:none">RasPINE Linux</a>
+                        <span class="badge">1080p / 4K</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Action buttons -->
+        <div style="display:flex; justify-content:center; gap:16px; flex-wrap:wrap; margin-bottom:24px;">
+            <a id="download-btn" href="https://github.com/MW0MWZ/Pi-Clock/releases/latest" class="link-btn primary" style="font-size:1.3em; padding:18px 48px; border-radius:14px; box-shadow:0 8px 24px rgba(201,168,76,0.35);">
+                Download Image
+            </a>
+            <a href="config-generator.html" class="link-btn primary" style="font-size:1.3em; padding:18px 48px; border-radius:14px; box-shadow:0 8px 24px rgba(201,168,76,0.35);">
+                Config Generator
+            </a>
+            <a href="manual/index.html" class="link-btn primary" style="font-size:1.3em; padding:18px 48px; border-radius:14px; box-shadow:0 8px 24px rgba(201,168,76,0.35);">
+                Manual
+            </a>
+        </div>
+        <p id="download-info" style="text-align:center; margin-top:-14px; margin-bottom:24px; color:var(--text-muted); font-size:0.85em;"></p>
+
+        <!-- Screenshot -->
+        <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:24px; margin-bottom:40px; text-align:center;">
+            <a href="screenshot.jpg" target="_blank" rel="noopener">
+                <img src="screenshot-thumb.jpg" alt="Pi-Clock running at 4K on a Raspberry Pi 5"
+                     style="width:100%; border-radius:8px;">
+            </a>
+            <p style="margin-top:12px; margin-bottom:0; color:var(--text-muted); font-size:14px;">Pi-Clock running at 4K on a Raspberry Pi 5 &mdash; click for full resolution</p>
+        </div>
+
+        <!-- Quick Start -->
+        <div class="quick-start">
+            <h2 class="section-title">Getting Started</h2>
+            <p style="color: var(--text-muted); margin-bottom: 16px;">
+                Get Pi-Clock running on your Raspberry Pi in five steps.
+                You'll need a Raspberry Pi (any model with HDMI), a micro SD card (4GB+), and an HDMI display.
+            </p>
+
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Create your configuration</h4>
+                        <p>Use the <a href="config-generator.html" style="color:var(--pic-gold)">Config Generator</a>
+                        to set up your WiFi, callsign, location, and display settings.
+                        Click <strong>Detect My Location</strong> to auto-fill timezone and coordinates,
+                        then download your <code>pi-clock-config.txt</code> file.</p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Download the OS image</h4>
+                        <p>Grab the latest Pi-Clock OS image using the
+                        <a id="step-download-link" href="https://github.com/MW0MWZ/Pi-Clock/releases/latest" style="color:var(--pic-gold)">download button above</a>,
+                        or click here to download directly. No need to extract the <code>.img.xz</code> file first.</p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Write the image to your SD card</h4>
+                        <p><strong>Windows &amp; macOS:</strong> Use
+                        <a href="https://www.raspberrypi.com/software/" style="color:var(--pic-gold)">Raspberry Pi Imager</a>
+                        &mdash; select "Use custom", choose the <code>.img.xz</code> file, and write to your SD card.
+                        Skip the OS Customisation screen (Pi-Clock has its own config system).</p>
+                        <p><strong>Linux:</strong></p>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+xzcat Pi-Clock-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+sync</div>
+                        <p style="margin-top: 6px; font-size: 0.85em; color: var(--text-muted);">
+                            Replace <code>/dev/sdX</code> with your SD card device. Use <code>lsblk</code> to find it.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h4>Add your config file</h4>
+                        <p>After writing the image, the SD card will have a <code>boot</code> partition visible on your PC.
+                        Copy the <code>pi-clock-config.txt</code> you generated in step 1 onto this partition.
+                        It will be processed automatically on first boot and then securely deleted.</p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-num">5</div>
+                    <div class="step-content">
+                        <h4>Boot &amp; configure</h4>
+                        <p>Insert the SD card into your Pi, connect HDMI and power.
+                        Pi-Clock will boot with the splash screen, connect to WiFi, and start displaying the world map.</p>
+                        <p>Open a browser and go to
+                        <code>https://pi-clock.local</code> (or whatever hostname you chose)
+                        to access the dashboard. Log in with your password and enable the layers and features you want
+                        &mdash; DX cluster, satellites, solar weather, news ticker, and more.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <h2 class="section-title">Features</h2>
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">&#127758;</div>
+                <h3>Real-time World Map</h3>
+                <p>NASA Blue Marble + Black Marble day/night blend with smooth greyline terminator. Beautiful at any resolution.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128225;</div>
+                <h3>DX Cluster Integration</h3>
+                <p>Live DX spots with great circle arcs, band-coloured markers, and a scrolling feed panel. Multi-cluster support.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128752;</div>
+                <h3>Satellite Tracking</h3>
+                <p>SGP4 orbit propagation for ISS, QO-100, and amateur satellites. Ground tracks, footprints, and live position.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9728;&#65039;</div>
+                <h3>Solar Weather</h3>
+                <p>Live NOAA SWPC data: SFI, Kp index, solar wind, X-ray flux. SDO sun images. Band condition predictions and MUF estimates.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128240;</div>
+                <h3>News Ticker</h3>
+                <p>Scrolling headlines from ARRL, RSGB, DX World, Southgate ARC, and NOAA space weather alerts.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128421;&#65039;</div>
+                <h3>Web Dashboard</h3>
+                <p>Configure everything from your browser. Layer controls, DX filters, satellite selection, WiFi, and system management.</p>
+            </div>
+        </div>
+
+        <!-- Supported Hardware -->
+        <h2 class="section-title">Supported Hardware</h2>
+        <div class="quick-start">
+            <p style="color: var(--text-muted); margin-bottom: 16px;">
+                Pi-Clock runs on every Raspberry Pi with HDMI output &mdash; from the original Model B through to the Pi 5.
+            </p>
+            <table style="width:100%; font-size:0.92em; border-collapse:collapse; margin-bottom:16px;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--border-color); text-align:left;">
+                        <th style="padding:8px 12px;">Model</th>
+                        <th style="padding:8px 12px;">Max Resolution</th>
+                        <th style="padding:8px 12px;">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:8px 12px;">Pi 1 (A/B/A+/B+)</td>
+                        <td style="padding:8px 12px;">1080p</td>
+                        <td style="padding:8px 12px; color:var(--text-muted);">HDMI hardware limited to 1080p. Single-core &mdash; reduced features*</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:8px 12px;">Pi Zero / Zero W</td>
+                        <td style="padding:8px 12px;">1080p</td>
+                        <td style="padding:8px 12px; color:var(--text-muted);">HDMI hardware limited to 1080p. Single-core &mdash; reduced features*</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:8px 12px;">Pi Zero 2 W</td>
+                        <td style="padding:8px 12px;">1080p</td>
+                        <td style="padding:8px 12px; color:var(--text-muted);">HDMI hardware limited to 1080p. Limited by 512MB RAM</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:8px 12px;">Pi 2</td>
+                        <td style="padding:8px 12px;">1080p</td>
+                        <td style="padding:8px 12px; color:var(--text-muted);">HDMI hardware limited to 1080p</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:8px 12px;">Pi 3 / 3A+ / 3B+</td>
+                        <td style="padding:8px 12px;">1080p</td>
+                        <td style="padding:8px 12px; color:var(--pic-green);">HDMI 1.4 limited to 1080p</td>
+                    </tr>
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:8px 12px;">Pi 4</td>
+                        <td style="padding:8px 12px;">4K</td>
+                        <td style="padding:8px 12px; color:var(--pic-green);">HDMI 2.0 &mdash; full 4K support</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px 12px;">Pi 5</td>
+                        <td style="padding:8px 12px;">4K</td>
+                        <td style="padding:8px 12px; color:var(--pic-green);">HDMI 2.0 &mdash; full 4K support</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:0.85em; color:var(--text-muted);">
+                * <strong>Single-core limits (Pi Zero, Pi Zero W, Pi 1):</strong>
+                Clock shows hours/minutes only (no seconds), news ticker uses Headlines mode only (no smooth scroll),
+                resolution capped at 1080p, ticker FPS capped at 30. All other features &mdash; DX cluster, satellites,
+                solar weather, overlays, and the web dashboard &mdash; work fully on every model.
+            </p>
+        </div>
+
+        <!-- Packages -->
+        <h2 class="section-title">Packages</h2>
+        <div class="packages">
+            <div class="package-card renderer">
+                <div class="package-name">pi-clock-renderer</div>
+                <div class="package-desc">
+                    Full-screen display renderer. Cairo 2D graphics with SDL2 display output.
+                    Renders to the Linux framebuffer &mdash; no X11, no Wayland needed.
+                </div>
+                <div class="package-deps">
+                    Arch: <code>armhf</code>
+                    &middot; Deps: <code>cairo</code> <code>sdl2</code> <code>ttf-dejavu</code>
+                </div>
+            </div>
+
+            <div class="package-card dashboard">
+                <div class="package-name">pi-clock-dashboard</div>
+                <div class="package-desc">
+                    Web-based management dashboard. Single static Go binary with embedded
+                    HTML/CSS/JS. HTTPS with auto-generated certificate.
+                </div>
+                <div class="package-deps">
+                    Arch: <code>armhf</code>
+                    &middot; No runtime dependencies
+                </div>
+            </div>
+
+            <div class="package-card maps">
+                <div class="package-name">pi-clock-maps</div>
+                <div class="package-desc">
+                    NASA satellite imagery and geodata. Blue Marble (day), Black Marble (night),
+                    country borders, timezone boundaries, and callsign prefix database.
+                </div>
+                <div class="package-deps">
+                    Arch: <code>noarch</code>
+                    &middot; Includes: 720p, 1080p, 1440p, 4K maps
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p style="margin-bottom: 6px;">Built with &#10084;&#65039; for the Amateur Radio community by Andy Taylor (MW0MWZ)</p>
+            <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+            <p style="margin-top: 6px;">
+                <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+                <span class="footer-sep">&middot;</span>
+                <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+                <span class="footer-sep">&middot;</span>
+                <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+            </p>
+        </footer>
+
+    </div>
+
+    <script>
+    function copyCode(btn) {
+        var block = btn.parentElement;
+        var text = block.textContent.replace('Copy', '').trim();
+        navigator.clipboard.writeText(text).then(function() {
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+        });
+    }
+
+    /* Resolve the latest .img.xz download URL from GitHub Releases.
+     * Falls back to the releases page if the API call fails. */
+    (function() {
+        var btn = document.getElementById('download-btn');
+        fetch('https://api.github.com/repos/MW0MWZ/Pi-Clock/releases/latest')
+            .then(function(r) { return r.json(); })
+            .then(function(release) {
+                var asset = release.assets && release.assets.find(function(a) {
+                    return a.name.match(/^Pi-Clock-.*\.img\.xz$/);
+                });
+                if (asset) {
+                    var url = asset.browser_download_url;
+                    btn.href = url;
+                    btn.textContent = 'Download ' + release.tag_name;
+                    var sizeMB = (asset.size / 1048576).toFixed(0);
+                    document.getElementById('download-info').textContent =
+                        asset.name + ' (' + sizeMB + ' MB)';
+                    var stepLink = document.getElementById('step-download-link');
+                    if (stepLink) stepLink.href = url;
+                }
+            })
+            .catch(function() { /* keep fallback link */ });
+    })();
+    </script>
+</body>
+</html>

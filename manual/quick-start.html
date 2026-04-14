@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Start - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html" class="active">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Quick Start</h1>
+        <p class="subtitle">Get Pi-Clock running in under ten minutes.</p>
+    </div>
+
+    <h2>What You Need</h2>
+
+    <ul>
+        <li>A <strong>Raspberry Pi</strong> (any model with HDMI &mdash; Pi Zero W, Pi 3, Pi 4, Pi 5, etc.)</li>
+        <li>A <strong>micro SD card</strong> (4 GB minimum)</li>
+        <li>An <strong>HDMI display</strong> (1080p recommended, 4K supported on Pi 4/5)</li>
+        <li>A <strong>power supply</strong> appropriate for your Pi model</li>
+        <li><strong>WiFi</strong> or <strong>Ethernet</strong> connectivity (optional for core display, required for live data)</li>
+    </ul>
+
+    <h2>Setup Steps</h2>
+
+    <div class="steps">
+
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+                <h4>Download &amp; Flash the SD Card Image</h4>
+                <p>Download the latest Pi-Clock OS image from the <a href="../index.html">Pi-Clock home page</a>. Flash it to your SD card using <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a>, <a href="https://etcher.balena.io/">balenaEtcher</a>, or <code>dd</code>:</p>
+<pre><code><span class="comment"># Example using dd (replace sdX with your SD card device)</span>
+xzcat pi-clock-os-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+sync</code></pre>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+                <h4>Create Your Configuration</h4>
+                <p>Use the <a href="../config-generator.html">Config Generator</a> to set up your WiFi, callsign, location, and display settings. Click <strong>Detect My Location</strong> to auto-fill your timezone and coordinates, then download the generated <code>pi-clock-config.txt</code> file.</p>
+                <p>Copy the file to the SD card's <strong>boot</strong> partition (the FAT32 partition visible on any computer). It is processed on first boot and then automatically deleted. See <a href="installation.html#zero-touch">Zero-Touch Configuration</a> for all available options.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+                <h4>Insert, Connect, Power On</h4>
+                <p>Insert the SD card into your Pi, connect the HDMI display, and apply power. Pi-Clock will:</p>
+                <ol>
+                    <li>Show the Pi-Clock splash screen immediately</li>
+                    <li>Expand the data partition to fill the SD card (automatic reboot on first boot)</li>
+                    <li>Connect to WiFi (if configured)</li>
+                    <li>Start the world map display</li>
+                    <li>Start the web dashboard</li>
+                </ol>
+                <p>First boot takes around 60 seconds due to the partition resize. Subsequent boots take 20&ndash;35 seconds depending on your Pi model.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+                <h4>Open the Dashboard</h4>
+                <p>From any device on the same network, open a browser and navigate to:</p>
+<pre><code>https://pi-clock.local</code></pre>
+                <p>If mDNS is not available on your network, use the Pi's IP address instead (shown on the display in the system info applet). The default login credentials are:</p>
+                <ul>
+                    <li><strong>Username:</strong> <code>pi-clock</code></li>
+                    <li><strong>Password:</strong> <code>pi-clock</code></li>
+                </ul>
+                <div class="callout callout-warning">
+                    <p><strong>Change your password immediately</strong> after first login. You can do this on the System page of the dashboard, or by setting <code>user_password=</code> in <code>pi-clock-config.txt</code> before first boot.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+                <h4>Configure Your Station</h4>
+                <p>In the dashboard, set your:</p>
+                <ul>
+                    <li><strong>Callsign</strong> &mdash; displayed on the QTH marker</li>
+                    <li><strong>QTH location</strong> &mdash; latitude/longitude (use the "Use My Location" button for automatic detection)</li>
+                    <li><strong>Layers</strong> &mdash; enable the features you want to see (DX spots, satellites, propagation, etc.)</li>
+                </ul>
+                <p>Changes take effect immediately on the display &mdash; no reboot required.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <h2>What You'll See</h2>
+
+    <p>After setup, your display will show:</p>
+
+    <ul>
+        <li>A full-screen world map with the day/night terminator (greyline) moving in real-time</li>
+        <li>UTC and local time clocks in the top corners</li>
+        <li>Your home QTH marker with your callsign</li>
+        <li>Any additional layers you enable (DX spots, satellites, grids, etc.)</li>
+    </ul>
+
+    <div class="callout callout-success">
+        <p><strong>That's it!</strong> Your Pi-Clock is now running. For detailed information about each feature, see the <a href="display.html">Display Layers</a> and <a href="applets.html">Applets</a> sections. For network-connected features like DX cluster and satellites, make sure your Pi has internet access.</p>
+    </div>
+
+    <h2>Next Steps</h2>
+
+    <ul>
+        <li><a href="display.html">Display Layers</a> &mdash; learn about all 15 map layers and how to configure them</li>
+        <li><a href="applets.html">Applets</a> &mdash; enable side-panel information displays</li>
+        <li><a href="dashboard.html">Dashboard Guide</a> &mdash; full tour of the web management interface</li>
+        <li><a href="installation.html">Installation &amp; OS</a> &mdash; deeper dive into the operating system, upgrades, and persistence</li>
+        <li><a href="hardware.html">Hardware Guide</a> &mdash; understand which Pi model is right for your needs</li>
+    </ul>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="about.html">
+            <span class="label">Previous</span>
+            <span class="title">About Pi-Clock</span>
+        </a>
+        <a href="installation.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Installation &amp; OS</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

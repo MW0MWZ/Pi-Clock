@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hardware Guide - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html" class="active">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Hardware Guide</h1>
+        <p class="subtitle">Supported Raspberry Pi models, display resolution limits, and performance considerations.</p>
+    </div>
+
+    <!-- ── Supported Models ──────────────────────────────────── -->
+    <h2>Supported Raspberry Pi Models</h2>
+
+    <p>Pi-Clock runs on every Raspberry Pi model with HDMI output. The software automatically adapts its behaviour based on the number of CPU cores and available GPU capabilities.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>CPU</th>
+                <th>Cores</th>
+                <th>RAM</th>
+                <th>Max Resolution</th>
+                <th>WiFi</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Pi Zero W</strong></td>
+                <td>ARM11 @ 1 GHz</td>
+                <td>1</td>
+                <td>512 MB</td>
+                <td>1080p</td>
+                <td>Built-in</td>
+            </tr>
+            <tr>
+                <td><strong>Pi Zero 2 W</strong></td>
+                <td>Cortex-A53 @ 1 GHz</td>
+                <td>4</td>
+                <td>512 MB</td>
+                <td>1080p</td>
+                <td>Built-in</td>
+            </tr>
+            <tr>
+                <td><strong>Pi 1 Model B+</strong></td>
+                <td>ARM11 @ 700 MHz</td>
+                <td>1</td>
+                <td>512 MB</td>
+                <td>1080p</td>
+                <td>No (USB adapter)</td>
+            </tr>
+            <tr>
+                <td><strong>Pi 2 Model B</strong></td>
+                <td>Cortex-A7 @ 900 MHz</td>
+                <td>4</td>
+                <td>1 GB</td>
+                <td>1080p</td>
+                <td>No (USB adapter)</td>
+            </tr>
+            <tr>
+                <td><strong>Pi 3 Model B/B+</strong></td>
+                <td>Cortex-A53 @ 1.2&ndash;1.4 GHz</td>
+                <td>4</td>
+                <td>1 GB</td>
+                <td>1080p</td>
+                <td>Built-in</td>
+            </tr>
+            <tr>
+                <td><strong>Pi 4 Model B</strong></td>
+                <td>Cortex-A72 @ 1.5&ndash;1.8 GHz</td>
+                <td>4</td>
+                <td>1&ndash;8 GB</td>
+                <td>4K</td>
+                <td>Built-in</td>
+            </tr>
+            <tr>
+                <td><strong>Pi 5</strong></td>
+                <td>Cortex-A76 @ 2.4 GHz</td>
+                <td>4</td>
+                <td>2&ndash;8 GB</td>
+                <td>4K</td>
+                <td>Built-in</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-success">
+        <p><strong>Recommended model:</strong> The <strong>Raspberry Pi Zero 2 W</strong> offers the best balance of cost, size, and performance for Pi-Clock. It has 4 cores (enabling smooth scroll, seconds display, and comfortable multi-layer rendering) in the same tiny form factor as the original Zero W. For 4K displays or heavy satellite tracking, choose a <strong>Pi 4</strong> or <strong>Pi 5</strong>.</p>
+    </div>
+
+    <!-- ── Resolution Limits ─────────────────────────────────── -->
+    <h2>Display Resolution</h2>
+
+    <h3>Supported Resolutions</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Resolution</th>
+                <th>Pixels</th>
+                <th>Supported Models</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>720p</strong></td>
+                <td>1280 &times; 720</td>
+                <td>All models</td>
+            </tr>
+            <tr>
+                <td><strong>1080p</strong></td>
+                <td>1920 &times; 1080</td>
+                <td>All models (default)</td>
+            </tr>
+            <tr>
+                <td><strong>1440p</strong></td>
+                <td>2560 &times; 1440</td>
+                <td>Pi 4, Pi 5 only</td>
+            </tr>
+            <tr>
+                <td><strong>4K</strong></td>
+                <td>3840 &times; 2160</td>
+                <td>Pi 4, Pi 5 only (HDMI 2.0)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-warning">
+        <p><strong>Single-core Pi models (Zero W, Pi 1) are capped at 1080p.</strong> Even if connected to a 4K monitor, the renderer will render at 1080p because the single-core CPU cannot sustain 4K rendering at an acceptable frame rate. The resolution cap is enforced automatically at boot.</p>
+    </div>
+
+    <h3>Resolution Detection</h3>
+
+    <p>Pi-Clock detects the display resolution in this priority order:</p>
+
+    <ol>
+        <li><strong>User override</strong> &mdash; if you selected a specific resolution in the dashboard or <code>pi-clock-renderer.conf</code>, that resolution is used (requires reboot to apply).</li>
+        <li><strong>CPU core cap</strong> &mdash; single-core Pi models are capped at 1080p regardless of the display.</li>
+        <li><strong>Monitor EDID</strong> &mdash; the framebuffer auto-detects the native resolution from the monitor's HDMI EDID data.</li>
+        <li><strong>Fallback</strong> &mdash; if detection fails, defaults to 1080p.</li>
+    </ol>
+
+    <h3>Framebuffer Requirements</h3>
+
+    <p>The renderer requires a <strong>32-bit colour depth</strong> (ARGB8888) framebuffer. This is set automatically in the Pi-Clock OS image via <code>framebuffer_depth=32</code> in <code>/boot/firmware/config.txt</code>. If you are running Pi-Clock on a custom Alpine Linux installation, ensure this setting is present.</p>
+
+    <!-- ── Single vs Multi Core ──────────────────────────────── -->
+    <h2>Single-Core vs Multi-Core Behaviour</h2>
+
+    <p>Pi-Clock automatically detects the number of CPU cores at startup and adapts several features accordingly. This ensures the best possible experience on every Pi model without manual tuning.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Feature</th>
+                <th>Single-Core (Pi Zero W, Pi 1)</th>
+                <th>Multi-Core (Pi 2, 3, 4, 5, Zero 2 W)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Clock display</strong></td>
+                <td>Hours and minutes only</td>
+                <td>Hours, minutes, and seconds</td>
+            </tr>
+            <tr>
+                <td><strong>HUD update rate</strong></td>
+                <td>Every 60 seconds</td>
+                <td>Every 1 second</td>
+            </tr>
+            <tr>
+                <td><strong>News ticker mode</strong></td>
+                <td>Headlines only (fly-in, hold, next)</td>
+                <td>Smooth scroll or Headlines (user choice)</td>
+            </tr>
+            <tr>
+                <td><strong>Ticker frame rate</strong></td>
+                <td>30 FPS</td>
+                <td>Display refresh rate</td>
+            </tr>
+            <tr>
+                <td><strong>Max resolution</strong></td>
+                <td>1080p (hard cap)</td>
+                <td>Up to 4K (Pi 4/5)</td>
+            </tr>
+            <tr>
+                <td><strong>Satellite tracking</strong></td>
+                <td>3&ndash;5 satellites recommended</td>
+                <td>All satellites comfortably</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>All other features (layers, applets, DX cluster, solar weather, propagation models) work identically on every model. The renderer's layer-caching system means static layers like grids and borders have zero ongoing CPU cost regardless of hardware.</p>
+
+    <!-- ── Performance ───────────────────────────────────────── -->
+    <h2>Performance Considerations</h2>
+
+    <h3>Layer CPU Cost</h3>
+
+    <p>Not all layers are equal in CPU usage. Here's a rough guide to help you choose which layers to enable on constrained hardware:</p>
+
+    <table>
+        <thead><tr><th>CPU Cost</th><th>Layers</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><span class="badge green">Zero</span></td>
+                <td>Base Map, Borders, Grid, Time Zones, CQ Zones, Maidenhead</td>
+                <td>Static layers &mdash; rendered once, composited from cache. No ongoing cost.</td>
+            </tr>
+            <tr>
+                <td><span class="badge green">Very Low</span></td>
+                <td>Sun, Moon, QTH Marker, HUD (60s mode)</td>
+                <td>Simple calculations, update only every 60 seconds.</td>
+            </tr>
+            <tr>
+                <td><span class="badge">Low</span></td>
+                <td>HUD (1s mode), DX Spots, News Ticker (headlines), Lightning, Earthquakes</td>
+                <td>Frequent updates but lightweight rendering. Lightning and earthquake layers re-render every second but draw very few primitives.</td>
+            </tr>
+            <tr>
+                <td><span class="badge gold">Medium</span></td>
+                <td>Daylight, News Ticker (smooth scroll), Satellite Tracking</td>
+                <td>Daylight does per-pixel solar math every 60s. Satellites propagate on every frame. Smooth scroll animates continuously.</td>
+            </tr>
+            <tr>
+                <td><span class="badge orange">Higher</span></td>
+                <td>Propagation Heat Map</td>
+                <td>Computes MUF/LUF for 180&times;90 grid cells. Recalculates every minute.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Recommendations by Model</h3>
+
+    <div class="feature-block">
+        <h3>Pi Zero W (1 core, 512 MB)</h3>
+        <p>The most constrained platform. Pi-Clock is specifically optimised for this hardware, but be selective about which features you enable.</p>
+        <ul>
+            <li>Stick to 1080p or 720p</li>
+            <li>The core display (map + daylight + clock + borders) runs comfortably</li>
+            <li>Add DX spots, solar weather applet, and a few layers without issue</li>
+            <li>Limit satellite tracking to 3&ndash;5 satellites</li>
+            <li>Use headlines mode for the news ticker (forced automatically)</li>
+            <li>The propagation heat map works but adds noticeable load</li>
+            <li>Avoid enabling everything simultaneously</li>
+        </ul>
+    </div>
+
+    <div class="feature-block">
+        <h3>Pi Zero 2 W / Pi 2 / Pi 3 (4 cores, 512 MB&ndash;1 GB)</h3>
+        <p>A significant step up from the single-core models. Comfortable for most configurations.</p>
+        <ul>
+            <li>1080p renders very smoothly</li>
+            <li>All layers and applets can run simultaneously</li>
+            <li>Smooth scroll ticker works well</li>
+            <li>Track 10+ satellites without issue</li>
+            <li>Propagation heat map + VOACAP applet together are fine</li>
+        </ul>
+    </div>
+
+    <div class="feature-block">
+        <h3>Pi 4 / Pi 5 (4 cores, 1&ndash;8 GB)</h3>
+        <p>More than enough power for everything Pi-Clock offers.</p>
+        <ul>
+            <li>4K rendering works well (Pi 4 may drop frames with all layers; Pi 5 is smooth)</li>
+            <li>Enable everything &mdash; all layers, all applets, all satellites</li>
+            <li>Dual HDMI outputs on Pi 4/5 (Pi-Clock uses the first HDMI port)</li>
+            <li>Consider 4K for wall-mounted displays where detail matters</li>
+        </ul>
+    </div>
+
+    <!-- ── Display Hardware ──────────────────────────────────── -->
+    <h2>Display Hardware</h2>
+
+    <h3>HDMI Connections</h3>
+
+    <table>
+        <thead><tr><th>Pi Model</th><th>HDMI Type</th><th>Max Output</th></tr></thead>
+        <tbody>
+            <tr><td>Pi Zero / Zero W / Zero 2 W</td><td>Mini HDMI</td><td>1080p @ 60 Hz</td></tr>
+            <tr><td>Pi 1 / Pi 2 / Pi 3</td><td>Full HDMI</td><td>1080p @ 60 Hz</td></tr>
+            <tr><td>Pi 4</td><td>2&times; Micro HDMI</td><td>4K @ 30 Hz</td></tr>
+            <tr><td>Pi 5</td><td>2&times; Micro HDMI</td><td>4K @ 30 Hz</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-info">
+        <p><strong>HDMI adapters:</strong> Pi Zero models need a mini-HDMI to HDMI adapter or cable. Pi 4/5 need micro-HDMI to HDMI. Make sure you have the right adapter for your Pi model.</p>
+    </div>
+
+    <div class="callout callout-warning">
+        <p><strong>Why 30 Hz at 4K?</strong> Pi-Clock always uses 4K @ 30 Hz rather than 60 Hz. This ensures maximum compatibility across display hardware and avoids a known issue on the Pi 5 where 4K @ 60 Hz causes interference with the 2.4 GHz WiFi radio.</p>
+    </div>
+
+    <h3>Recommended Displays</h3>
+
+    <p>Pi-Clock works with any HDMI display. For the best experience:</p>
+
+    <ul>
+        <li><strong>Size:</strong> 24&rdquo; or larger for comfortable viewing from across a room or shack</li>
+        <li><strong>Resolution:</strong> 1080p is the sweet spot for most setups. 4K is beautiful but requires a Pi 4/5</li>
+        <li><strong>Panel type:</strong> IPS panels offer better viewing angles for a wall-mounted clock</li>
+        <li><strong>TV vs monitor:</strong> Either works. TVs often have a "PC mode" or "game mode" that reduces input lag and overscan</li>
+    </ul>
+
+    <div class="callout callout-warning">
+        <p><strong>Overscan:</strong> Some TVs apply overscan (cropping the edges of the image). If the clock text or applets are cut off at the screen edges, look for an "overscan", "fit to screen", or "1:1 pixel mapping" option in your TV's settings.</p>
+    </div>
+
+    <!-- ── Display Output ────────────────────────────────────── -->
+    <h2>Display Output Method</h2>
+
+    <p>Pi-Clock renders directly to the Linux framebuffer (<code>/dev/fb0</code>) via SDL2 with the KMSDRM backend. No X11 window manager, no Wayland compositor, and no desktop environment is needed. This gives the renderer direct access to the display hardware with minimal overhead.</p>
+
+    <table>
+        <thead><tr><th>Pi Model</th><th>Display Driver</th><th>GPU</th></tr></thead>
+        <tbody>
+            <tr><td>Pi Zero / Pi 1 / Pi 2 / Pi 3</td><td>Legacy framebuffer (<code>/dev/fb0</code>)</td><td>VideoCore IV</td></tr>
+            <tr><td>Pi 4</td><td>KMS/DRM (<code>vc4-kms-v3d-pi4</code>)</td><td>VideoCore VI</td></tr>
+            <tr><td>Pi 5</td><td>KMS/DRM (<code>vc4-kms-v3d-pi5</code>)</td><td>VideoCore VII</td></tr>
+        </tbody>
+    </table>
+
+    <p>The renderer automatically selects the correct driver for your Pi model.</p>
+
+    <!-- ── Power Supply ──────────────────────────────────────── -->
+    <h2>Power Supply</h2>
+
+    <p>Use the correct power supply for your Pi model to avoid under-voltage issues (which cause CPU throttling and display glitches):</p>
+
+    <table>
+        <thead><tr><th>Pi Model</th><th>Connector</th><th>Recommended</th></tr></thead>
+        <tbody>
+            <tr><td>Pi Zero / Zero W / Zero 2 W</td><td>Micro USB</td><td>5V 2.5A</td></tr>
+            <tr><td>Pi 1 / Pi 2 / Pi 3</td><td>Micro USB</td><td>5V 2.5A</td></tr>
+            <tr><td>Pi 4</td><td>USB-C</td><td>5V 3A (official PSU recommended)</td></tr>
+            <tr><td>Pi 5</td><td>USB-C</td><td>5V 5A (official 27W PSU recommended)</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-warning">
+        <p><strong>Under-voltage:</strong> If the Pi is under-powered, the CPU throttles and the display may stutter or freeze. The renderer logs a warning if it detects CPU throttling. Use the official Raspberry Pi power supply for best results.</p>
+    </div>
+
+    <!-- ── SD Card ───────────────────────────────────────────── -->
+    <h2>SD Card</h2>
+
+    <ul>
+        <li><strong>Minimum size:</strong> 4 GB (the OS image with both slots and data partition fits in approximately 3.5 GB)</li>
+        <li><strong>Speed class:</strong> Class 10 / UHS-I or faster. Affects boot time, not runtime performance.</li>
+        <li><strong>Endurance:</strong> For 24/7 operation, use a high-endurance card (Samsung PRO Endurance, SanDisk MAX Endurance). Pi-Clock minimises writes, but SD cards do degrade over time.</li>
+    </ul>
+
+    <!-- ── Network ───────────────────────────────────────────── -->
+    <h2>Network Connectivity</h2>
+
+    <p>Network connectivity is optional for the core display but required for live data features:</p>
+
+    <table>
+        <thead><tr><th>Feature</th><th>Network Required</th></tr></thead>
+        <tbody>
+            <tr><td>Map, greyline, clock, grids, QTH marker</td><td>No</td></tr>
+            <tr><td>Sun and moon positions</td><td>No</td></tr>
+            <tr><td>MUF estimates (basic)</td><td>No (uses default SFI)</td></tr>
+            <tr><td>DX cluster spots</td><td>Yes (telnet connection)</td></tr>
+            <tr><td>Solar weather indices</td><td>Yes (NOAA SWPC API)</td></tr>
+            <tr><td>Satellite tracking</td><td>Yes (Celestrak TLEs, daily)</td></tr>
+            <tr><td>Propagation predictions (accurate)</td><td>Yes (live SFI/Kp from NOAA)</td></tr>
+            <tr><td>Lightning strikes</td><td>Yes (Blitzortung WebSocket)</td></tr>
+            <tr><td>Earthquakes</td><td>Yes (USGS GeoJSON, polled every 60s)</td></tr>
+            <tr><td>News ticker</td><td>Yes (RSS feeds)</td></tr>
+            <tr><td>Web dashboard access</td><td>Yes (local network)</td></tr>
+        </tbody>
+    </table>
+
+    <p><strong>WiFi vs Ethernet:</strong> WiFi is sufficient for all Pi-Clock data needs (the data rates are very low &mdash; a few kilobytes every few minutes). Ethernet is more reliable for 24/7 operation and avoids WiFi dropout issues.</p>
+
+    <!-- ── Thermal ───────────────────────────────────────────── -->
+    <h2>Thermal Considerations</h2>
+
+    <p>Pi-Clock's CPU usage is moderate (it's not constantly rendering at maximum frame rate), but for 24/7 operation:</p>
+
+    <ul>
+        <li><strong>Pi Zero / Zero W:</strong> Typically fine without a heatsink. The single-core adaptations keep CPU usage low.</li>
+        <li><strong>Pi Zero 2 W / Pi 3:</strong> A small heatsink is recommended for sustained operation, especially if many layers are enabled.</li>
+        <li><strong>Pi 4 / Pi 5:</strong> A heatsink or case with passive cooling is recommended. The official Pi 4/5 cases with built-in heatsinks work well. Active cooling is unnecessary for Pi-Clock.</li>
+    </ul>
+
+    <p>The OS sets a thermal throttle limit of 75&deg;C in <code>config.txt</code>. If the CPU reaches this temperature, it will reduce clock speed to prevent overheating.</p>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="configuration.html">
+            <span class="label">Previous</span>
+            <span class="title">Configuration Reference</span>
+        </a>
+        <a href="index.html" class="next">
+            <span class="label">Back to</span>
+            <span class="title">Table of Contents</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

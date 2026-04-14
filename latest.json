@@ -1,0 +1,7 @@
+{
+  "version": "2026-04-15r0",
+  "date": "2026-04-15",
+  "image": "Pi-Clock-2026-04-15r0.img.xz",
+  "rootfs": "Pi-Clock-2026-04-15r0.rootfs.tar.xz",
+  "url": "https://github.com/MW0MWZ/Pi-Clock/releases/tag/v2026-04-15r0"
+}

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html" class="active">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <!-- Page header -->
+    <div class="page-header">
+        <h1>Pi-Clock Manual</h1>
+        <p class="subtitle">Complete guide to setting up, configuring, and operating your Pi-Clock world map display.</p>
+    </div>
+
+    <!-- Intro -->
+    <p>Pi-Clock is an open-source ham radio world clock that turns a Raspberry Pi and any HDMI display into a real-time map showing day/night, DX cluster spots, satellite tracks, solar weather, HF propagation predictions, and more. This manual covers everything from first boot to advanced configuration.</p>
+
+    <div class="callout callout-info">
+        <p><strong>New to Pi-Clock?</strong> Start with the <a href="quick-start.html">Quick Start</a> guide to get up and running in minutes, then explore the other sections at your own pace.</p>
+    </div>
+
+    <!-- Chapter grid -->
+    <h2>Contents</h2>
+
+    <div class="grid">
+        <a href="about.html" class="grid-card">
+            <div class="icon">&#127758;</div>
+            <h3>About Pi-Clock</h3>
+            <p>What Pi-Clock is, what it does, and how it compares to other ham radio world clocks.</p>
+        </a>
+
+        <a href="quick-start.html" class="grid-card">
+            <div class="icon">&#9889;</div>
+            <h3>Quick Start</h3>
+            <p>Get Pi-Clock running in three steps. Flash the SD card, plug in, and configure.</p>
+        </a>
+
+        <a href="installation.html" class="grid-card">
+            <div class="icon">&#128187;</div>
+            <h3>Installation &amp; OS</h3>
+            <p>Full installation guide, OS architecture, A/B slot upgrades, persistence, and zero-touch configuration.</p>
+        </a>
+
+        <a href="display.html" class="grid-card">
+            <div class="icon">&#128506;</div>
+            <h3>Display Layers</h3>
+            <p>All 15 map layers: base maps, greyline, grids, DX spots, satellites, propagation, and more.</p>
+        </a>
+
+        <a href="applets.html" class="grid-card">
+            <div class="icon">&#128202;</div>
+            <h3>Applets</h3>
+            <p>Side-panel information displays: DX feed, solar weather, MUF estimates, VOACAP predictions, and system info.</p>
+        </a>
+
+        <a href="dashboard.html" class="grid-card">
+            <div class="icon">&#128421;&#65039;</div>
+            <h3>Web Dashboard</h3>
+            <p>Browser-based control panel for layers, DX settings, satellite selection, system management, and more.</p>
+        </a>
+
+        <a href="configuration.html" class="grid-card">
+            <div class="icon">&#128736;</div>
+            <h3>Configuration Reference</h3>
+            <p>Complete reference for all configuration files, keys, formats, and values.</p>
+        </a>
+
+        <a href="hardware.html" class="grid-card">
+            <div class="icon">&#129518;</div>
+            <h3>Hardware Guide</h3>
+            <p>Supported Raspberry Pi models, resolution limits, single-core adaptations, and performance considerations.</p>
+        </a>
+    </div>
+
+    <!-- Footer -->
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

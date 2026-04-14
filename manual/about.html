@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Pi-Clock</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html" class="active">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>About Pi-Clock</h1>
+        <p class="subtitle">An open-source ham radio world clock for Raspberry Pi.</p>
+    </div>
+
+    <h2>What is Pi-Clock?</h2>
+
+    <p>Pi-Clock is a fully open-source (GPL-2.0) ham radio world clock, inspired by the classic GeoChron concept but built from scratch as an independent project. It runs on a Raspberry Pi connected to any HDMI display and shows a high-resolution world map with real-time astronomical, propagation, and DX data.</p>
+
+    <p>The display composites NASA satellite imagery (Blue Marble for daytime, Black Marble city lights for night) with a physically accurate greyline terminator, then overlays live ham radio data: DX cluster spots, satellite ground tracks, HF propagation predictions, solar weather indices, and a scrolling news ticker.</p>
+
+    <p>Everything is configurable through a web-based dashboard accessible from any browser on your local network. Layers can be toggled on and off, opacity adjusted, and features configured without touching the Pi itself.</p>
+
+    <h2>Key Features</h2>
+
+    <div class="grid">
+        <div class="card">
+            <h3>Real-Time World Map</h3>
+            <p>NASA Blue Marble (day) and Black Marble (night) imagery with a smooth greyline terminator that updates every 60 seconds. Beautiful at 1080p or 4K.</p>
+        </div>
+        <div class="card">
+            <h3>DX Cluster Integration</h3>
+            <p>Live DX spots plotted on the map with great-circle arcs, band-coloured markers, and a scrolling feed panel. Connects to any DX Spider or AR Cluster server via telnet.</p>
+        </div>
+        <div class="card">
+            <h3>Satellite Tracking</h3>
+            <p>SGP4 orbit propagation for ISS, QO-100, and 15+ amateur satellites. Ground tracks, visibility footprints, and real-time position markers with automatic TLE updates from Celestrak.</p>
+        </div>
+        <div class="card">
+            <h3>Solar Weather &amp; Propagation</h3>
+            <p>Live NOAA SWPC data (SFI, Kp, solar wind, X-ray flux, SDO images), MUF estimates for five directions, and a full VOACAP-style band/hour/distance heat map.</p>
+        </div>
+        <div class="card">
+            <h3>News Ticker</h3>
+            <p>Scrolling headlines from ARRL, RSGB, DX World, Southgate ARC, and NOAA space weather alerts. Smooth scroll on multi-core Pi, headline mode on single-core.</p>
+        </div>
+        <div class="card">
+            <h3>Lightning &amp; Earthquakes</h3>
+            <p>Real-time lightning strikes from Blitzortung.org with attract-flash effect and colour fade. USGS earthquake data (M4.5+) with seismograph icons and concentric ripple rings.</p>
+        </div>
+        <div class="card">
+            <h3>Web Dashboard</h3>
+            <p>Configure everything from your browser over HTTPS. Layer controls, DX filters, satellite selection, WiFi, hostname, password, OS upgrades, and system management.</p>
+        </div>
+    </div>
+
+    <h2>Design Philosophy</h2>
+
+    <ul>
+        <li><strong>Small, fast, and light</strong> &mdash; every CPU cycle matters on a single-core Pi Zero W. The renderer is written in C and layers are only re-rendered when their data changes.</li>
+        <li><strong>Minimal dependencies</strong> &mdash; only SDL2, Cairo, and Mesa. The dashboard is a single static Go binary. No X11, no Wayland, no desktop environment.</li>
+        <li><strong>Offline-first</strong> &mdash; the core display (map, greyline, clock, grids, QTH marker) works with no network. Live features (DX, satellites, solar, news) require connectivity but degrade gracefully.</li>
+        <li><strong>GPU over CPU</strong> &mdash; compositing is offloaded to the VideoCore IV GPU where possible, keeping the CPU free for data processing.</li>
+        <li><strong>Open and extensible</strong> &mdash; all source code is GPL-2.0 and written to teaching quality with thorough comments. Community contributions welcome.</li>
+    </ul>
+
+    <h2>How It Compares to HamClock</h2>
+
+    <p>The primary alternative for a ham radio world clock display is <strong>HamClock</strong> by WB0OEW. Pi-Clock was created to address several limitations:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Feature</th>
+                <th>Pi-Clock</th>
+                <th>HamClock</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Source code</td>
+                <td>Open source (GPL-2.0)</td>
+                <td>Closed source</td>
+            </tr>
+            <tr>
+                <td>Native resolution</td>
+                <td>1080p / 4K</td>
+                <td>800x480 base (scales up)</td>
+            </tr>
+            <tr>
+                <td>Base maps</td>
+                <td>NASA Blue &amp; Black Marble satellite imagery</td>
+                <td>Stylised vector maps</td>
+            </tr>
+            <tr>
+                <td>Day/night blend</td>
+                <td>Smooth photorealistic terminator</td>
+                <td>Hard boundary</td>
+            </tr>
+            <tr>
+                <td>Configuration</td>
+                <td>Web dashboard (any browser)</td>
+                <td>Touch/mouse on the display itself</td>
+            </tr>
+            <tr>
+                <td>Layer system</td>
+                <td>15 independent layers with per-layer opacity</td>
+                <td>Fixed layout</td>
+            </tr>
+            <tr>
+                <td>Propagation model</td>
+                <td>VOACAP band/hour/distance heat map + MUF</td>
+                <td>VOACAP band conditions</td>
+            </tr>
+            <tr>
+                <td>DX cluster</td>
+                <td>Multi-cluster, band colours, great-circle arcs</td>
+                <td>Single cluster</td>
+            </tr>
+            <tr>
+                <td>OS upgrades</td>
+                <td>A/B slot with automatic rollback</td>
+                <td>Manual update</td>
+            </tr>
+            <tr>
+                <td>Development</td>
+                <td>Community (open contributions)</td>
+                <td>Single developer</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-info">
+        <p><strong>Note:</strong> HamClock is an excellent piece of software and WB0OEW deserves great credit for building and maintaining it. Pi-Clock simply takes a different approach &mdash; open source, native high resolution, and community-driven development.</p>
+    </div>
+
+    <h2>Project Components</h2>
+
+    <p>Pi-Clock is delivered as three Alpine Linux packages:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Package</th>
+                <th>Language</th>
+                <th>Purpose</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>pi-clock-renderer</code></td>
+                <td>C</td>
+                <td>Full-screen map display with all layers. Renders directly to the framebuffer via SDL2 &mdash; no desktop environment needed.</td>
+            </tr>
+            <tr>
+                <td><code>pi-clock-dashboard</code></td>
+                <td>Go</td>
+                <td>Web-based management UI. Single static binary with embedded HTML/CSS/JS. HTTPS with auto-generated certificate.</td>
+            </tr>
+            <tr>
+                <td><code>pi-clock-maps</code></td>
+                <td>Data</td>
+                <td>NASA satellite imagery at four resolutions (720p, 1080p, 1440p, 4K), country borders, timezone boundaries, CQ zones, and the callsign prefix database.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Licence</h2>
+
+    <p>Pi-Clock is released under the <strong>GNU General Public License v2.0</strong> (GPL-2.0). You are free to use, modify, and redistribute the software, provided that derivative works are also released under the same licence. The full licence text is included in the source repository.</p>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="index.html">
+            <span class="label">Previous</span>
+            <span class="title">Table of Contents</span>
+        </a>
+        <a href="quick-start.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Quick Start</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

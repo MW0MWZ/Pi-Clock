@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Dashboard - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html" class="active">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Web Dashboard</h1>
+        <p class="subtitle">Configure and manage Pi-Clock from any browser on your network.</p>
+    </div>
+
+    <h2>Accessing the Dashboard</h2>
+
+    <p>The dashboard runs on your Pi-Clock and is accessible over HTTPS from any device on the same network:</p>
+
+<pre><code>https://pi-clock.local</code></pre>
+
+    <p>If mDNS/Bonjour is not available on your network, use the Pi's IP address instead (visible in the system info applet on the display, or find it via your router's DHCP lease table).</p>
+
+    <div class="callout callout-info">
+        <p><strong>Self-signed certificate:</strong> The dashboard uses an auto-generated ECDSA P-256 certificate. Your browser will show a security warning on first visit &mdash; this is expected. Accept the certificate to proceed. The certificate is valid for 10 years and persists across OS upgrades.</p>
+    </div>
+
+    <h3>Login</h3>
+
+    <p>The dashboard requires authentication. Default credentials:</p>
+
+    <ul>
+        <li><strong>Username:</strong> <code>pi-clock</code></li>
+        <li><strong>Password:</strong> <code>pi-clock</code> (change this immediately!)</li>
+    </ul>
+
+    <p>Sessions expire after 30 minutes of inactivity. Login attempts are rate-limited to 5 per minute per IP address to prevent brute-force attacks.</p>
+
+    <!-- ── Station Settings ──────────────────────────────────── -->
+    <h2>Station Settings</h2>
+
+    <p>Set your amateur radio station details. These are used by the QTH marker, DX cluster distance filter, MUF predictions, and VOACAP propagation model.</p>
+
+    <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Callsign</strong></td><td>Your amateur radio callsign, displayed on the QTH marker.</td></tr>
+            <tr><td><strong>QTH Latitude</strong></td><td>Your station latitude (-90 to +90 degrees).</td></tr>
+            <tr><td><strong>QTH Longitude</strong></td><td>Your station longitude (-180 to +180 degrees).</td></tr>
+            <tr><td><strong>Grid Square</strong></td><td>Maidenhead locator (6-character, e.g., IO91wm). Auto-calculated from lat/lon if left blank.</td></tr>
+        </tbody>
+    </table>
+
+    <p>Click the <strong>"Use My Location"</strong> button to automatically fill in your latitude, longitude, and grid square using your browser's geolocation API. This requires HTTPS and your browser's permission.</p>
+
+    <!-- ── Display Settings ──────────────────────────────────── -->
+    <h2>Display Settings</h2>
+
+    <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Center Longitude</strong></td><td>The longitude at the horizontal centre of the map (-180 to +180). Set this to your local longitude to centre the map on your part of the world. Default: 0 (Greenwich).</td></tr>
+            <tr><td><strong>Display Resolution</strong></td><td>Choose from Native (auto-detect from monitor), 720p, 1080p, 1440p, or 4K. Changes take effect after reboot. See the <a href="hardware.html">Hardware Guide</a> for per-model limits.</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── Layer Controls ────────────────────────────────────── -->
+    <h2>Layer Controls</h2>
+
+    <p>The layer controls section lets you toggle each of the 15 display layers on or off, and adjust their opacity from 0% (fully transparent) to 100% (fully opaque). See <a href="display.html">Display Layers</a> for a full description of each layer.</p>
+
+    <p>Two layers are always on and cannot be disabled: <strong>Base Map</strong> and <strong>Daylight</strong>. These form the foundation of the display.</p>
+
+    <p>When you enable certain layers, additional configuration cards will appear on the dashboard:</p>
+
+    <ul>
+        <li>Enable <strong>DX Cluster Spots</strong> &rarr; DX Cluster Settings card appears</li>
+        <li>Enable <strong>Satellite Tracking</strong> &rarr; Satellite Selection card appears</li>
+        <li>Enable <strong>Propagation Heat Map</strong> &rarr; Propagation Settings card appears</li>
+        <li>Enable <strong>Lightning Strikes</strong> &rarr; Lightning Settings card appears</li>
+        <li>Enable <strong>Earthquakes</strong> &rarr; Earthquake Settings card appears</li>
+        <li>Enable <strong>News Ticker</strong> &rarr; Ticker Sources card appears</li>
+    </ul>
+
+    <p>Changes are applied immediately to the display &mdash; no reboot required.</p>
+
+    <!-- ── DX Settings ───────────────────────────────────────── -->
+    <h2 id="dx-settings">DX Cluster Settings</h2>
+
+    <p>This card appears when the DX Cluster Spots layer is enabled. It controls how DX spots are filtered and displayed.</p>
+
+    <h3>Distance Filter</h3>
+    <p>Limits displayed spots to those within a certain distance of your QTH. Great-circle distance is calculated from your home coordinates. Options:</p>
+    <ul>
+        <li><strong>All spots</strong> (no filter)</li>
+        <li>500 miles / 800 km</li>
+        <li>1,000 miles / 1,600 km</li>
+        <li>2,000 miles / 3,200 km</li>
+        <li>3,000 miles / 4,800 km</li>
+        <li>5,000 miles / 8,000 km</li>
+    </ul>
+
+    <h3>Spot Age</h3>
+    <p>How long spots remain on the map before expiring. Older spots fade in opacity as they approach expiry. Options: 5, 10, 15 (default), 30, or 60 minutes.</p>
+
+    <h3>Band Filter</h3>
+    <p>Toggle individual bands on or off. Each band has a colour-coded button matching the band colours used on the map. You can enable any combination of the 12 bands from 160m through 2m.</p>
+
+    <!-- ── Satellite Selection ───────────────────────────────── -->
+    <h2>Satellite Selection</h2>
+
+    <p>This card appears when the Satellite Tracking layer is enabled. It shows a list of available amateur radio satellites grouped by category (Popular, FM Repeaters, Linear Transponders, Digipeaters, Weather). Toggle each satellite on or off individually.</p>
+
+    <div class="callout callout-warning">
+        <p><strong>Performance:</strong> Each tracked satellite requires real-time SGP4 orbit propagation on every frame. On a Pi Zero W, limit to 3&ndash;5 satellites. On a Pi 4/5, you can comfortably track all available satellites simultaneously.</p>
+    </div>
+
+    <!-- ── Lightning Settings ────────────────────────────────── -->
+    <h2>Lightning Settings</h2>
+
+    <p>This card appears when the Lightning Strikes layer is enabled. Data is sourced from the Blitzortung.org community network via a real-time WebSocket connection.</p>
+
+    <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Fade Time</strong></td><td>How long each strike remains visible on the map. Options: 15 seconds (default), 30 seconds, 60 seconds, or 120 seconds. Longer times show more strike history but can clutter the map during active storms.</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── Earthquake Settings ──────────────────────────────── -->
+    <h2>Earthquake Settings</h2>
+
+    <p>This card appears when the Earthquakes layer is enabled. Data is sourced from the USGS Earthquake Hazards Program (M4.5+ globally).</p>
+
+    <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Display Time</strong></td><td>How long each earthquake remains visible on the map. Options: 30 minutes, 1 hour, 2 hours, 4 hours, 12 hours, or 24 hours (default). The USGS feed provides events from the past 24 hours, so the default shows all available data.</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── Propagation Settings ──────────────────────────────── -->
+    <h2>Propagation Settings</h2>
+
+    <p>This card appears when the Propagation Heat Map layer is enabled.</p>
+
+    <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Band Selection</strong></td><td>Choose which HF bands (80m through 10m) are included in the propagation cycle. Each band has a colour-coded toggle button.</td></tr>
+            <tr><td><strong>Antenna Gain</strong></td><td>Your antenna gain in dBi (-12 to +12). Affects the predicted signal reliability &mdash; higher gain means the model predicts more paths as "open". Default: 0 dBi.</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── Applet Controls ───────────────────────────────────── -->
+    <h2>Applet Controls</h2>
+
+    <p>Enable or disable each of the six applet panels and choose whether they appear on the left or right side of the display. See <a href="applets.html">Applets</a> for full details on each applet.</p>
+
+    <!-- ── Ticker Sources ────────────────────────────────────── -->
+    <h2>Ticker Sources</h2>
+
+    <p>This card appears when the News Ticker layer is enabled. Configure:</p>
+
+    <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>Display Mode</strong></td><td><strong>Smooth scroll</strong> (continuous horizontal motion, multi-core only) or <strong>Headlines</strong> (fly-in, hold, next &mdash; works on all hardware). Single-core Pi is forced to Headlines mode regardless of this setting.</td></tr>
+            <tr><td><strong>News Sources</strong></td><td>Toggle each source independently: NOAA Alerts, DX World, ARRL News, RSGB GB2RS, Southgate ARC.</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ── System Management ─────────────────────────────────── -->
+    <h2>System Management</h2>
+
+    <p>The System section of the dashboard provides tools for managing the Pi-Clock hardware and OS.</p>
+
+    <h3>System Information</h3>
+    <p>Displays the Pi model, hostname, uptime, CPU architecture and cores, display resolution, refresh rate, and OS version. Also shows the A/B slot status (active slot, versions, and whether an upgrade is pending).</p>
+
+    <h3>WiFi Configuration</h3>
+    <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>SSID</strong></td><td>WiFi network name (max 32 characters).</td></tr>
+            <tr><td><strong>Password</strong></td><td>WPA2 passphrase (8&ndash;63 characters). Stored as a hashed PSK, never in plain text.</td></tr>
+            <tr><td><strong>Country Code</strong></td><td>2-letter ISO country code for WiFi regulatory domain (e.g., GB, US, DE). Defaults to GB.</td></tr>
+        </tbody>
+    </table>
+    <p>WiFi changes are applied immediately via <code>wpa_cli reconfigure</code> &mdash; no reboot needed.</p>
+
+    <h3>Hostname</h3>
+    <p>Change the system hostname (letters, digits, and hyphens; max 63 characters). The mDNS name updates to <code>{hostname}.local</code>. Applied immediately and persisted across OS upgrades.</p>
+
+    <h3>Password</h3>
+    <p>Change the dashboard login password. Requires the current password for verification. Must be at least 8 characters. All active sessions are invalidated when the password is changed.</p>
+
+    <h3>Reboot &amp; Shutdown</h3>
+    <p>Reboot or shut down the Pi-Clock from the dashboard. Both actions show a confirmation dialog before proceeding.</p>
+
+    <h3>Package Upgrade</h3>
+    <p>Updates all Alpine Linux packages (including the Pi-Clock renderer, dashboard, and maps) to the latest versions available in the configured repositories. Equivalent to <code>apk update &amp;&amp; apk upgrade</code>.</p>
+
+    <h3>OS Image Upgrade</h3>
+    <p>Downloads and installs a complete new OS image to the inactive A/B slot. The dashboard shows real-time progress via Server-Sent Events as the upgrade progresses through seven stages: manifest check, download, verify, format, extract, boot update, and finalise.</p>
+    <p>After the upgrade completes, reboot to activate the new slot. The boot watchdog will automatically roll back if the new slot fails to boot successfully three times. See <a href="installation.html">Installation &amp; OS</a> for full details on the A/B upgrade system.</p>
+
+    <h3>Update Check</h3>
+    <p>Checks for a newer OS version without installing it. Shows the installed version and the latest available version.</p>
+
+    <h3>Rollback</h3>
+    <p>Manually switch back to the previous OS slot. Useful if an upgrade introduced unexpected behaviour that didn't trigger the automatic three-strike rollback.</p>
+
+    <!-- ── Security ──────────────────────────────────────────── -->
+    <h2>Security</h2>
+
+    <p>The dashboard implements several security measures appropriate for a home network appliance:</p>
+
+    <ul>
+        <li><strong>HTTPS only</strong> &mdash; HTTP (port 80) automatically redirects to HTTPS (port 443)</li>
+        <li><strong>HSTS</strong> &mdash; Strict-Transport-Security header forces HTTPS for 1 year</li>
+        <li><strong>Secure cookies</strong> &mdash; HttpOnly, Secure, SameSite=Strict session cookies</li>
+        <li><strong>Rate limiting</strong> &mdash; 5 login attempts per minute per IP address</li>
+        <li><strong>Constant-time password comparison</strong> &mdash; prevents timing attacks</li>
+        <li><strong>Content Security Policy</strong> &mdash; restricts scripts and styles to self-origin only</li>
+        <li><strong>Clickjacking protection</strong> &mdash; X-Frame-Options: DENY</li>
+        <li><strong>Request body limit</strong> &mdash; 1 MB maximum to prevent memory exhaustion on Pi Zero W</li>
+        <li><strong>Input validation</strong> &mdash; all user input is validated server-side with regex whitelists</li>
+    </ul>
+
+    <!-- ── mDNS Discovery ────────────────────────────────────── -->
+    <h2>mDNS / Bonjour Discovery</h2>
+
+    <p>Pi-Clock advertises itself on the local network via mDNS (multicast DNS / Bonjour). This allows you to access the dashboard at <code>https://pi-clock.local</code> (or <code>https://{hostname}.local</code> if you changed the hostname) without needing to know the IP address.</p>
+
+    <p>mDNS works automatically on macOS, iOS, and most Linux distributions. On Windows, you may need to install <a href="https://support.apple.com/kb/DL999">Bonjour Print Services</a> or use the IP address directly.</p>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="applets.html">
+            <span class="label">Previous</span>
+            <span class="title">Applets</span>
+        </a>
+        <a href="configuration.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Configuration Reference</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

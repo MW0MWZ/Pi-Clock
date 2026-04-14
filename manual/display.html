@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Layers - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html" class="active">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Display Layers</h1>
+        <p class="subtitle">All 15 layers that make up the Pi-Clock world map display.</p>
+    </div>
+
+    <p>The Pi-Clock display is built from independent layers, composited from back to front. Each layer can be toggled on or off and (for most layers) have its opacity adjusted from 0&ndash;100%. Layers are only re-rendered when their data changes, so static layers like grids and borders have zero ongoing CPU cost.</p>
+
+    <p>Layers are configured through the <a href="dashboard.html">web dashboard</a> or by editing <code>/data/etc/pi-clock-layers.conf</code> directly. Changes take effect immediately &mdash; no reboot required.</p>
+
+    <div class="callout callout-info">
+        <p><strong>Enabling layers on a Pi Zero W:</strong> All layers work on every Pi model, but enabling many layers simultaneously on a single-core Pi Zero W will reduce the frame rate. Start with the defaults and add layers one at a time. See the <a href="hardware.html">Hardware Guide</a> for performance details.</p>
+    </div>
+
+    <h2>Layer Summary</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Layer</th>
+                <th>Default</th>
+                <th>Update Interval</th>
+                <th>Network</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Base Map (Night)</td><td>On</td><td>Static</td><td>No</td></tr>
+            <tr><td>Daylight (Day/Night Blend)</td><td>On</td><td>60s</td><td>No</td></tr>
+            <tr><td>Country Borders</td><td>On</td><td>Static</td><td>No</td></tr>
+            <tr><td>Lat/Lon Grid</td><td>Off</td><td>Static</td><td>No</td></tr>
+            <tr><td>Time Zones</td><td>On</td><td>Static</td><td>No</td></tr>
+            <tr><td>CQ Zones</td><td>Off</td><td>Static</td><td>No</td></tr>
+            <tr><td>Maidenhead Grid</td><td>Off</td><td>Static</td><td>No</td></tr>
+            <tr><td>Sun Position</td><td>Off</td><td>60s</td><td>No</td></tr>
+            <tr><td>Moon Position</td><td>Off</td><td>60s</td><td>No</td></tr>
+            <tr><td>DX Cluster Spots</td><td>Off</td><td>30&ndash;60s</td><td>Yes</td></tr>
+            <tr><td>Propagation Heat Map</td><td>Off</td><td>10s cycle</td><td>Yes*</td></tr>
+            <tr><td>Satellite Tracking</td><td>Off</td><td>Real-time</td><td>Yes**</td></tr>
+            <tr><td>Lightning Strikes</td><td>Off</td><td>1s</td><td>Yes</td></tr>
+            <tr><td>Earthquakes</td><td>Off</td><td>1s</td><td>Yes</td></tr>
+            <tr><td>Home QTH Marker</td><td>On</td><td>60s</td><td>No</td></tr>
+            <tr><td>Clock / HUD</td><td>On</td><td>1s / 60s***</td><td>No</td></tr>
+            <tr><td>News Ticker</td><td>Off</td><td>15min</td><td>Yes</td></tr>
+        </tbody>
+    </table>
+
+    <p style="font-size: 0.85em; color: var(--text-muted);">
+        * Propagation uses live SFI from NOAA but works with defaults (SFI=100) if offline.<br>
+        ** Satellites compute orbits locally but need network for TLE updates (daily).<br>
+        *** HUD updates every 1 second on multi-core Pi, every 60 seconds on single-core.
+    </p>
+
+    <!-- ── Base Map ──────────────────────────────────────────── -->
+    <h2>Core Map Layers</h2>
+
+    <div class="feature-block">
+        <h3>Base Map (Night)</h3>
+        <div class="feature-meta">
+            <span class="tag">Static</span>
+            <span class="tag">Always On</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>The base layer renders the NASA Black Marble (city lights at night) image as a full-screen equirectangular map. This forms the background that all other layers are composited on top of.</p>
+        <p>The base map supports the <strong>center longitude</strong> setting &mdash; the map wraps horizontally so you can center it on your part of the world (e.g., set to -90 to center on the Americas, or +140 for the Pacific).</p>
+        <p><strong>Data source:</strong> NASA Black Marble (Earth at Night), provided by the <code>pi-clock-maps</code> package at 720p, 1080p, 1440p, and 4K resolutions.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Daylight (Day/Night Blend)</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 60s</span>
+            <span class="tag">Always On</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>This layer composites the NASA Blue Marble (daytime satellite imagery) over the sunlit hemisphere, blending smoothly across the twilight zone to create the greyline terminator effect. The result is a photorealistic day/night view of the Earth that updates every 60 seconds as the terminator moves.</p>
+        <p>The solar position is calculated using the Meeus algorithm (accurate to within a few arcseconds) and the illumination is computed per-pixel for a smooth gradient from day to night.</p>
+        <p><strong>Data source:</strong> NASA Blue Marble Next Generation (daytime). Solar math is computed offline &mdash; no network needed.</p>
+        <div class="callout callout-info">
+            <p><strong>Performance note:</strong> At higher resolutions, the daylight calculation uses adaptive sampling (4-pixel steps at 1080p, 8-pixel at 4K) to reduce the number of trigonometric calculations per frame.</p>
+        </div>
+    </div>
+
+    <div class="feature-block">
+        <h3>Country Borders</h3>
+        <div class="feature-meta">
+            <span class="tag">Static</span>
+            <span class="tag">Default: On</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>Draws country boundary lines over the map. Loaded from a binary borders data file derived from Natural Earth 10m cultural vectors.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <!-- ── Grid Overlays ─────────────────────────────────────── -->
+    <h2>Grid &amp; Zone Overlays</h2>
+
+    <div class="feature-block">
+        <h3>Lat/Lon Grid (Graticule)</h3>
+        <div class="feature-meta">
+            <span class="tag">Static</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>A latitude/longitude reference grid drawn every 10 degrees. Special lines are emphasised: the Equator, Prime Meridian, Tropics of Cancer and Capricorn, and the Arctic and Antarctic circles. Grid intersection points are labelled with their coordinates.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Time Zones</h3>
+        <div class="feature-meta">
+            <span class="tag">Static</span>
+            <span class="tag">Default: On</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>Real-world time zone boundaries following political borders, drawn as dotted blue lines. Each zone is labelled with its UTC offset (UTC-12 through UTC+14). Based on the Natural Earth 10m time zones dataset.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>CQ Zones</h3>
+        <div class="feature-meta">
+            <span class="tag">Static</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>The 40 CQ zones used in DX contests (CQ WW, CQ WPX, etc.). Drawn as dashed orange boundary lines with zone numbers positioned at each zone's centroid. Useful for contest operators who need to quickly identify which CQ zone a station is in.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Maidenhead Grid</h3>
+        <div class="feature-meta">
+            <span class="tag">Static</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>The Maidenhead locator system grid used universally in amateur radio for location exchange. Displays the 18&times;18 field grid (each field is 20&deg; longitude &times; 10&deg; latitude) with two-letter field labels (AA through RR). Drawn as dashed green lines.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <!-- ── Celestial Bodies ──────────────────────────────────── -->
+    <h2>Celestial Body Markers</h2>
+
+    <div class="feature-block">
+        <h3>Sun Position</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 60s</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>Marks the sub-solar point (where the sun is directly overhead) with a filled yellow/orange circle and eight radiating rays. The marker moves approximately 15&deg; westward per hour and varies north/south with the seasons. Marker size scales with the display resolution.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Moon Position &amp; Phase</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 60s</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>Marks the sub-lunar point with a moon icon that shows the current phase. The illuminated portion is drawn as a partial fill (crescent, quarter, gibbous, or full), accurately reflecting the real-time moon phase. The dark (unlit) portion is shown in grey.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <!-- ── Ham Radio Data ────────────────────────────────────── -->
+    <h2>Ham Radio Data Layers</h2>
+
+    <div class="feature-block">
+        <h3>DX Cluster Spots</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 30&ndash;60s</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>Connects to a DX cluster server via telnet and plots live DX spots on the map. Each spot is shown as a band-coloured dot at the DX station's location, with an optional great-circle arc from the spotter to the DX station. Callsign labels are displayed with dark background pills for readability.</p>
+
+        <h4>Band Colours</h4>
+        <table>
+            <thead>
+                <tr><th>Band</th><th>Colour</th><th>Band</th><th>Colour</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>160m</td><td>Dark Red</td><td>17m</td><td>Cyan</td></tr>
+                <tr><td>80m</td><td>Orange-Red</td><td>15m</td><td>Blue</td></tr>
+                <tr><td>60m</td><td>Dark Orange</td><td>12m</td><td>Violet</td></tr>
+                <tr><td>40m</td><td>Orange</td><td>10m</td><td>Magenta</td></tr>
+                <tr><td>30m</td><td>Yellow</td><td>6m</td><td>White</td></tr>
+                <tr><td>20m</td><td>Green</td><td>2m</td><td>Grey</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Spot Ageing</h4>
+        <p>Spots fade in opacity as they approach their expiry time. In the final 5 minutes before a spot expires, it gradually becomes more transparent. The maximum spot age is configurable (default: 15 minutes).</p>
+
+        <h4>Configuration</h4>
+        <ul>
+            <li><strong>Cluster server</strong> &mdash; hostname and port (default: dxc.ve7cc.net:7373)</li>
+            <li><strong>Distance filter</strong> &mdash; maximum distance from your QTH in km (0 = no filter)</li>
+            <li><strong>Band filter</strong> &mdash; enable/disable individual bands (160m through 2m)</li>
+            <li><strong>Spot age</strong> &mdash; how long spots remain on the map (5, 10, 15, 30, or 60 minutes)</li>
+        </ul>
+
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity. DX settings card appears when this layer is enabled. See <a href="dashboard.html#dx-settings">DX Cluster Settings</a> for full configuration details.</p>
+
+        <p><strong>Data source:</strong> Any DX Spider or AR Cluster server via telnet. Callsign-to-location resolution uses the cty.dat prefix database (AD1C/ARRL).</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Propagation Heat Map</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 10s (band cycle)</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Uses NOAA SFI</span>
+        </div>
+        <p>Displays an HF band propagation heat map across the entire map surface. The map shows signal reliability from your QTH to every 2-degree grid cell, using a simplified VOACAP ionospheric model that incorporates live solar flux data.</p>
+
+        <h4>How It Works</h4>
+        <p>The heat map automatically cycles through the amateur HF bands (80m through 10m) every 10 seconds, showing which parts of the world are reachable on each band at the current time. The model considers:</p>
+        <ul>
+            <li>F2 layer critical frequency (based on latitude and sunspot number)</li>
+            <li>D-layer absorption (time-of-day and latitude dependent)</li>
+            <li>Multi-hop propagation (obliquity factors for different distances)</li>
+            <li>Geomagnetic storm degradation (using live Kp index)</li>
+        </ul>
+
+        <h4>Reading the Heat Map</h4>
+        <p>The heat map uses a single colour with varying opacity to show propagation likelihood. Areas with <strong>higher opacity</strong> (more solid colour) indicate a higher probability of a usable signal path. Areas with <strong>lower opacity</strong> (more transparent, showing the map underneath) indicate propagation is less likely. Completely transparent areas have no predicted propagation on that band at the current time.</p>
+
+        <h4>Configuration</h4>
+        <ul>
+            <li><strong>Band selection</strong> &mdash; enable/disable individual bands in the cycle (80m through 10m)</li>
+            <li><strong>Antenna gain</strong> &mdash; your antenna gain in dBi (affects predicted reliability)</li>
+        </ul>
+
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity. Propagation settings card appears when enabled.</p>
+
+        <div class="callout callout-info">
+            <p><strong>Offline operation:</strong> The propagation model works offline using default solar values (SFI=100). When connected to the internet, it uses live SFI and Kp data from NOAA for more accurate predictions.</p>
+        </div>
+    </div>
+
+    <div class="feature-block">
+        <h3>Satellite Tracking</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: Real-time</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network (for TLEs)</span>
+        </div>
+        <p>Tracks amateur radio satellites in real-time using SGP4 orbit propagation. Each enabled satellite is shown with:</p>
+        <ul>
+            <li>A <strong>filled dot</strong> at the current sub-satellite point</li>
+            <li>A <strong>ground track</strong> showing past (faded) and future (bright) orbit path</li>
+            <li>A <strong>dashed visibility footprint</strong> circle showing the area where the satellite is above the horizon (0&deg; elevation)</li>
+            <li>A <strong>label</strong> with the satellite name and current altitude</li>
+        </ul>
+        <p>Each satellite is drawn in a different colour (cycling through 8 colours) for easy identification when tracking multiple satellites.</p>
+
+        <h4>Available Satellites</h4>
+        <table>
+            <thead><tr><th>Category</th><th>Satellites</th></tr></thead>
+            <tbody>
+                <tr><td>Popular</td><td>ISS (ZARYA), QO-100 (Es'hail-2)</td></tr>
+                <tr><td>FM Repeaters</td><td>AO-91, SO-50, PO-101, AO-123, SO-125</td></tr>
+                <tr><td>Linear (SSB/CW)</td><td>AO-7, AO-73, RS-44, JO-97</td></tr>
+                <tr><td>Digipeaters</td><td>SONATE-2 (APRS), ISS APRS</td></tr>
+                <tr><td>Weather (LRPT)</td><td>Meteor-M 2, M2-2, M2-3, M2-4</td></tr>
+            </tbody>
+        </table>
+
+        <h4>TLE Updates</h4>
+        <p>Two-Line Element sets (TLEs) are automatically updated from Celestrak every 24 hours. You can also force an update from the dashboard. Satellite position accuracy degrades without current TLEs &mdash; keep your Pi-Clock connected to the internet for best results.</p>
+
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity. The satellite selection card appears when enabled, allowing you to choose which satellites to track.</p>
+
+        <div class="callout callout-warning">
+            <p><strong>Performance:</strong> Satellite orbits are propagated on every frame. Tracking many satellites simultaneously increases CPU load. On a Pi Zero W, limit to 3&ndash;5 satellites for best performance.</p>
+        </div>
+    </div>
+
+    <!-- ── Environmental Data ─────────────────────────────────── -->
+    <h2>Environmental Data Layers</h2>
+
+    <div class="feature-block">
+        <h3>Lightning Strikes</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 1s</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>Real-time lightning strikes from the <strong>Blitzortung.org</strong> community lightning detection network. Strikes are received via a TLS WebSocket connection and plotted on the map as small lightning bolt icons.</p>
+
+        <h4>Visual Effect</h4>
+        <p>When a new strike arrives, it appears as a large (3x) bright white lightning bolt for one frame to attract attention, then immediately shrinks to normal size and fades through a colour sequence:</p>
+        <ul>
+            <li><strong>White</strong> &mdash; fresh strike (first second)</li>
+            <li><strong>Yellow</strong> &mdash; ageing</li>
+            <li><strong>Deep red</strong> &mdash; about to disappear</li>
+        </ul>
+        <p>After the fade time expires, the strike disappears. The fade time is configurable from the dashboard: 15 seconds (default), 30, 60, or 120 seconds.</p>
+
+        <h4>Data Source</h4>
+        <p>Blitzortung.org is a community-operated lightning detection network with volunteer stations worldwide. Coverage is densest in Europe and North America. Data arrives in real-time (1&ndash;3 second latency from the actual strike).</p>
+
+        <div class="callout callout-info">
+            <p><strong>Network required:</strong> The fetcher thread only runs when this layer is enabled. Disabling the layer closes the WebSocket connection and stops all network traffic.</p>
+        </div>
+
+        <p><strong>Dashboard:</strong> Toggle on/off. When enabled, a settings card appears with a fade time dropdown.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Earthquakes</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 60s (polling)</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>Significant earthquakes (magnitude 4.5+) from the <strong>USGS Earthquake Hazards Program</strong>. The USGS GeoJSON feed is polled every 60 seconds and events are plotted on the map at their epicentre.</p>
+
+        <h4>Visual Effect</h4>
+        <p>Each earthquake is shown with:</p>
+        <ul>
+            <li>A <strong>seismograph-style zigzag icon</strong> at the epicentre, sized by magnitude</li>
+            <li><strong>Concentric ripple rings</strong> radiating outward &mdash; tightly packed, bright at the centre, fading toward the edge</li>
+            <li>A <strong>magnitude label</strong> (e.g., "M5.2") for events M5.0 and above</li>
+        </ul>
+        <p>Events fade out over the final 25% of the display window. The display time is configurable from the dashboard: 30 minutes to 24 hours (default 24 hours, matching the USGS daily feed window).</p>
+
+        <h4>Data Source</h4>
+        <p>USGS Earthquake Hazards Program (<code>earthquake.usgs.gov</code>). Public domain US federal data, no authentication required. The M4.5+ daily feed typically contains 15&ndash;60 events and is 20&ndash;80 KB per fetch.</p>
+
+        <div class="callout callout-info">
+            <p><strong>Network required:</strong> The fetcher thread only runs when this layer is enabled. Disabling the layer stops polling entirely.</p>
+        </div>
+
+        <p><strong>Dashboard:</strong> Toggle on/off. When enabled, a settings card appears with a display time dropdown.</p>
+    </div>
+
+    <!-- ── HUD & Information ─────────────────────────────────── -->
+    <h2>Information Layers</h2>
+
+    <div class="feature-block">
+        <h3>Home QTH Marker</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 60s</span>
+            <span class="tag">Default: On</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>Marks your home station location with a crosshair marker (blue inner dot, white outer ring) and your callsign label. The marker only appears when QTH latitude and longitude are both set to non-zero values.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity. Set your QTH position and callsign in the Station Settings section.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Clock / HUD</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 1s or 60s</span>
+            <span class="tag">Default: On</span>
+            <span class="tag">No Network</span>
+        </div>
+        <p>Displays time and date in the top corners of the screen:</p>
+        <ul>
+            <li><strong>Top left:</strong> UTC time and date</li>
+            <li><strong>Top right:</strong> Local time (system timezone) and date, with timezone abbreviation (e.g., "BST", "EDT")</li>
+        </ul>
+        <p>Text is rendered with a shadow for readability on any background. Font sizes scale automatically with the display resolution.</p>
+        <div class="callout callout-warning">
+            <p><strong>Single-core Pi:</strong> On the Pi Zero W and Pi 1, the clock displays hours and minutes only (no seconds) and updates every 60 seconds instead of every second. This saves significant CPU on single-core hardware.</p>
+        </div>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>News Ticker</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 15min (feed refresh)</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>A full-width bar at the bottom of the screen showing scrolling news headlines from ham radio and space weather sources. The ticker avoids overlapping with side-panel applets by respecting their margins.</p>
+
+        <h4>Display Modes</h4>
+        <ul>
+            <li><strong>Smooth scroll</strong> &mdash; continuous horizontal scrolling (multi-core Pi only)</li>
+            <li><strong>Headlines</strong> &mdash; headline flies in (0.5s), title holds for 5 seconds, description slides through in chunks (15s hold), then the next headline. This is the default mode on single-core Pi for CPU efficiency.</li>
+        </ul>
+
+        <h4>News Sources</h4>
+        <table>
+            <thead><tr><th>Source</th><th>Content</th></tr></thead>
+            <tbody>
+                <tr><td>NOAA Alerts</td><td>Space weather warnings and alerts</td></tr>
+                <tr><td>DX World</td><td>DXpedition news and announcements</td></tr>
+                <tr><td>ARRL News</td><td>American Radio Relay League news</td></tr>
+                <tr><td>RSGB GB2RS</td><td>Radio Society of Great Britain news</td></tr>
+                <tr><td>Southgate ARC</td><td>Amateur radio community news</td></tr>
+            </tbody>
+        </table>
+
+        <p>Each source can be individually enabled or disabled. Headlines are shown with a gold title and grey description text, with source names as separators between items.</p>
+
+        <p><strong>Dashboard:</strong> Toggle on/off. News source and display mode settings appear when enabled.</p>
+    </div>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="installation.html">
+            <span class="label">Previous</span>
+            <span class="title">Installation &amp; OS</span>
+        </a>
+        <a href="applets.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Applets</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>
