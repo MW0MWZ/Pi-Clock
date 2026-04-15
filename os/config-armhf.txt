@@ -1,0 +1,104 @@
+# Pi-Clock /boot/firmware/config.txt (armhf)
+# 32-bit image — runs on all Raspberry Pi models
+# Uses legacy framebuffer (no KMS) for 32bpp rendering
+
+# Automatically load overlays for detected cameras
+camera_auto_detect=0
+
+# Automatically load overlays for detected DSI displays
+display_auto_detect=1
+
+# Automatically load initramfs files, if found
+auto_initramfs=1
+
+# Don't have the firmware create an initial video= setting in cmdline.txt.
+disable_fw_kms_setup=1
+
+# Disable compensation for displays with overscan
+disable_overscan=1
+
+# ── Model Specifics ────────────────────────────────────────
+
+[pi0]
+#dtoverlay=vc4-fkms-v3d
+max_framebuffers=1
+gpu_mem=32
+kernel=kernel.img
+dtoverlay=miniuart-bt
+
+[pi1]
+#dtoverlay=vc4-fkms-v3d
+max_framebuffers=1
+gpu_mem=16
+config_hdmi_boost=5
+kernel=kernel.img
+
+[pi2]
+#dtoverlay=vc4-fkms-v3d
+max_framebuffers=1
+gpu_mem=32
+kernel=kernel7.img
+
+[pi3]
+#dtoverlay=vc4-fkms-v3d
+max_framebuffers=1
+gpu_mem=32
+kernel=kernel8.img
+dtoverlay=miniuart-bt
+
+[pi3+]
+#dtoverlay=vc4-fkms-v3d
+max_framebuffers=1
+gpu_mem=32
+kernel=kernel8.img
+dtoverlay=miniuart-bt
+
+[pi02]
+#dtoverlay=vc4-fkms-v3d
+max_framebuffers=1
+gpu_mem=32
+kernel=kernel8.img
+dtoverlay=miniuart-bt
+
+[pi4]
+dtoverlay=vc4-kms-v3d-pi4
+max_framebuffers=2
+gpu_mem=64
+kernel=kernel8.img
+dtoverlay=miniuart-bt
+
+[cm4]
+dtoverlay=vc4-kms-v3d-pi4
+max_framebuffers=2
+gpu_mem=64
+kernel=kernel8.img
+dtoverlay=miniuart-bt
+otg_mode=1
+
+[pi5]
+dtoverlay=vc4-kms-v3d-pi5
+max_framebuffers=2
+gpu_mem=64
+kernel=kernel8.img
+dtoverlay=miniuart-bt
+
+[cm5]
+dtoverlay=vc4-kms-v3d-pi5
+max_framebuffers=2
+gpu_mem=64
+kernel=kernel8.img
+dtoverlay=dwc2,dr_mode=host,miniuart-bt
+
+[all]
+temp_limit=75
+dtparam=uart0=on
+dtparam=spi=on
+dtparam=i2c_arm=on
+
+[all]
+# Default 1080p 32bpp — renderer requires 32bpp
+# Resolution can be overridden from the dashboard
+framebuffer_width=1920
+framebuffer_height=1080
+framebuffer_depth=32
+framebuffer_ignore_alpha=1

@@ -1,0 +1,3 @@
+#!/bin/sh
+rc-service pi-clock-dashboard restart 2>/dev/null || true
+exit 0

@@ -1,0 +1,47 @@
+#!/bin/sh
+# pi-clock-slot-info - Display current A/B slot status
+# Part of Pi-Clock OS
+
+SLOT_CONF="/boot/firmware/slot.conf"
+
+if [ ! -f "$SLOT_CONF" ]; then
+	echo "Error: $SLOT_CONF not found" >&2
+	exit 1
+fi
+
+# shellcheck disable=SC1090
+. "$SLOT_CONF"
+
+# Map slot letter to partition number
+slot_to_part() {
+	case "$1" in
+		A) echo "2" ;;
+		B) echo "3" ;;
+		*) echo "?" ;;
+	esac
+}
+
+active_part=$(slot_to_part "$ACTIVE_SLOT")
+
+# Determine boot status
+if [ "$PENDING" = "true" ]; then
+	boot_status="PENDING (try $BOOT_TRIES)"
+else
+	boot_status="OK"
+fi
+
+# Format version strings
+slot_a_ver="${SLOT_A_VERSION:-not installed}"
+slot_b_ver="${SLOT_B_VERSION:-not installed}"
+
+echo "Pi-Clock OS Slot Information"
+echo "Active Slot:  $ACTIVE_SLOT (partition $active_part)"
+echo "Slot A:       $slot_a_ver"
+echo "Slot B:       $slot_b_ver"
+echo "Boot Status:  $boot_status"
+echo "Pending:      $PENDING"
+
+if [ -n "$PREVIOUS_SLOT" ]; then
+	prev_part=$(slot_to_part "$PREVIOUS_SLOT")
+	echo "Previous:     $PREVIOUS_SLOT (partition $prev_part)"
+fi

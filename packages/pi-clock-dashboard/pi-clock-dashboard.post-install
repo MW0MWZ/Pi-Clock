@@ -1,0 +1,4 @@
+#!/bin/sh
+rc-update add pi-clock-dashboard default 2>/dev/null || true
+rc-service pi-clock-dashboard start 2>/dev/null || true
+exit 0

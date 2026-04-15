@@ -1,0 +1,131 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-renderer - Start the Pi-Clock display renderer
+# Part of Pi-Clock
+#
+# On boot, the system starts at a low framebuffer resolution (1024x768)
+# for fast startup. This service detects the requested resolution from
+# the renderer config, updates config.txt if needed, then starts the
+# renderer. The renderer auto-detects the framebuffer dimensions.
+#
+# Resolution selection priority:
+#   1. DISPLAY_RESOLUTION from pi-clock-renderer.conf (user override)
+#   2. Single-core Pi cap: 1080p max (CPU can't handle 4K rendering)
+#   3. Monitor's native EDID resolution
+
+description="Pi-Clock display renderer"
+command="/usr/bin/pi-clock"
+command_background=true
+pidfile="/run/pi-clock.pid"
+output_log="/var/log/pi-clock-renderer.log"
+error_log="/var/log/pi-clock-renderer.log"
+
+# SDL2's KMSDRM backend needs XDG_RUNTIME_DIR. On Pi 3/4/5 the vc4
+# DRM driver is active so SDL uses KMSDRM instead of legacy framebuffer.
+# start-stop-daemon -e passes environment to the child process.
+start_stop_daemon_args="-e XDG_RUNTIME_DIR=/run/user/0"
+
+depend() {
+	need localmount
+	after pi-clock-config pi-clock-bindmounts pi-clock-splash
+}
+
+# Detect number of CPU cores
+get_cpu_cores() {
+	if [ -f /proc/cpuinfo ]; then
+		grep -c '^processor' /proc/cpuinfo
+	else
+		echo 1
+	fi
+}
+
+start_pre() {
+	# Kill any stale renderer processes to prevent double-writes to fb
+	killall pi-clock 2>/dev/null || true
+
+	# Ensure XDG_RUNTIME_DIR exists for SDL2 KMSDRM
+	mkdir -p /run/user/0 2>/dev/null || true
+
+	# Ensure we're on tty7 — the splash service switches here
+	# early in boot, but confirm it in case splash didn't run.
+	# tty1-6 remain available for console login (Ctrl+Alt+F1).
+	chvt 7 2>/dev/null || true
+
+	# ── Resolution handling ─────────────────────────────────────
+	# The framebuffer resolution is set at boot via config.txt
+	# (framebuffer_width/height). The legacy bcm2708_fb driver
+	# doesn't support runtime changes — only vc4 DRM does.
+	#
+	# If the user selects a resolution via the dashboard, we
+	# update config.txt here so the next reboot uses it.
+	RENDER_CONF="/data/etc/pi-clock-renderer.conf"
+	CONFIG_TXT="/boot/firmware/config.txt"
+	FB_SYSFS="/sys/class/graphics/fb0"
+	CPU_CORES=$(get_cpu_cores)
+
+	# Read renderer config for CENTER_LON, DISPLAY_RESOLUTION, etc
+	DISPLAY_RESOLUTION=""
+	if [ -f "$RENDER_CONF" ]; then
+		# shellcheck disable=SC1090
+		. "$RENDER_CONF"
+	fi
+
+	# Apply requested resolution to config.txt if it differs
+	# from what's currently configured. Takes effect next reboot.
+	if [ -n "$DISPLAY_RESOLUTION" ] && [ "$DISPLAY_RESOLUTION" != "native" ] && [ -f "$CONFIG_TXT" ]; then
+		case "$DISPLAY_RESOLUTION" in
+			720p)  REQ_W=1280; REQ_H=720  ;;
+			1080p) REQ_W=1920; REQ_H=1080 ;;
+			1440p) REQ_W=2560; REQ_H=1440 ;;
+			4k)    REQ_W=3840; REQ_H=2160 ;;
+			*)     REQ_W=""; REQ_H=""     ;;
+		esac
+
+		if [ -n "$REQ_W" ]; then
+			CUR_W=$(grep -m1 '^framebuffer_width=' "$CONFIG_TXT" 2>/dev/null | cut -d= -f2)
+			CUR_H=$(grep -m1 '^framebuffer_height=' "$CONFIG_TXT" 2>/dev/null | cut -d= -f2)
+
+			if [ "$CUR_W" != "$REQ_W" ] || [ "$CUR_H" != "$REQ_H" ]; then
+				einfo "Updating config.txt: ${CUR_W}x${CUR_H} -> ${REQ_W}x${REQ_H}"
+				sed -i "s/^framebuffer_width=.*/framebuffer_width=${REQ_W}/" "$CONFIG_TXT"
+				sed -i "s/^framebuffer_height=.*/framebuffer_height=${REQ_H}/" "$CONFIG_TXT"
+
+				# Add entries if they don't exist
+				grep -q '^framebuffer_width=' "$CONFIG_TXT" || \
+					echo "framebuffer_width=${REQ_W}" >> "$CONFIG_TXT"
+				grep -q '^framebuffer_height=' "$CONFIG_TXT" || \
+					echo "framebuffer_height=${REQ_H}" >> "$CONFIG_TXT"
+			fi
+		fi
+	fi
+
+	ACTUAL_SIZE=$(cat "$FB_SYSFS/virtual_size" 2>/dev/null || echo "unknown")
+	ACTUAL_BPP=$(cat "$FB_SYSFS/bits_per_pixel" 2>/dev/null || echo "unknown")
+	einfo "Framebuffer: ${ACTUAL_SIZE} @ ${ACTUAL_BPP}bpp"
+
+	# Sanity check: renderer requires 32bpp
+	if [ "$ACTUAL_BPP" != "32" ]; then
+		ewarn "Framebuffer is ${ACTUAL_BPP}bpp, renderer requires 32bpp"
+		ewarn "Add framebuffer_depth=32 to config.txt and reboot"
+	fi
+
+	# Write display status for the dashboard (tmpfs — no SD card wear)
+	mkdir -p /tmp/pi-clock-cache
+	{
+		echo "ACTUAL_RESOLUTION=$ACTUAL_SIZE"
+		echo "CPU_CORES=$CPU_CORES"
+		echo "DISPLAY_RESOLUTION=${DISPLAY_RESOLUTION:-native}"
+	} > /tmp/pi-clock-cache/display-status 2>/dev/null || true
+
+	# ── Build renderer arguments ─────────────────────────────────
+	MAPS_DIR="/usr/share/pi-clock/maps"
+
+	# Resolution is auto-detected from the framebuffer — no need
+	# to pass --width/--height.
+	RENDER_ARGS="--maps-dir $MAPS_DIR"
+
+	[ -n "$CENTER_LON" ] && [ "$CENTER_LON" != "0" ] && \
+		RENDER_ARGS="$RENDER_ARGS --center-lon $CENTER_LON"
+
+	command_args="$RENDER_ARGS"
+}

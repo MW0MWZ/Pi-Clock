@@ -1,0 +1,76 @@
+# Pi-Clock Boot Configuration
+# Copy this file to the boot partition as 'pi-clock-config.txt'
+# Remove the # from lines you want to use
+# WARNING: This file will be DELETED after processing for security!
+#
+# This file works for both FIRST BOOT and RECOVERY:
+#   - First boot: configure WiFi, SSH, etc. on a new install
+#   - Recovery: pop the SD card out, mount on a PC, drop this file
+#     on the boot partition, put card back, reboot
+
+# === WIFI CONFIGURATION ===
+# Primary network (highest priority)
+#wifi_ssid=YourHomeNetwork
+#wifi_password=YourHomePassword
+
+# Secondary networks (numbered for priority - higher numbers = higher priority)
+#wifi_ssid_2=YourWorkNetwork
+#wifi_password_2=YourWorkPassword
+
+#wifi_ssid_3=YourMobileHotspot
+#wifi_password_3=YourHotspotPassword
+
+# Additional networks (add as many as needed, up to 10)
+#wifi_ssid_4=CoffeeShopWiFi
+#wifi_password_4=CoffeeShopPassword
+
+# WiFi country code (affects available channels and power limits)
+# See: https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
+wifi_country=GB
+
+# Allow connection to open networks (no password) - use with caution!
+# When true, networks with an SSID but no password will use key_mgmt=NONE
+enable_open_networks=false
+
+# === USER SECURITY ===
+# Set password for pi-clock user (required for SSH password auth)
+user_password=raspberry
+
+# Enable SSH password authentication (default: key-only)
+# Set to true if you want to log in with a password over SSH
+enable_ssh_password=true
+
+# Add SSH public key for secure access (recommended)
+# You can add multiple keys by repeating this line
+#ssh_key=ssh-rsa AAAAB3NzaC1yc2EAAAA... your-email@example.com
+
+# === SYSTEM CONFIGURATION ===
+hostname=pi-clock
+timezone=Europe/London
+locale=en_GB.UTF-8
+
+# === PI-CLOCK DISPLAY SETTINGS ===
+# Center the map on your QTH longitude (-180 to 180)
+# Default: 0 (Greenwich / Prime Meridian)
+#center_lon=0
+
+# Your station location (for beam headings, greyline alerts)
+# Use decimal degrees (north/east positive)
+#qth_lat=51.5074
+#qth_lon=-0.1278
+
+# Your callsign and Maidenhead grid square
+#callsign=M1ABC
+#grid_square=IO91wm
+
+# Display resolution: 720p, 1080p, 1440p, 4k
+# Must match your connected display
+display_resolution=1080p
+
+# === SECURITY NOTES ===
+# - Root account is disabled by default (secure)
+# - The pi-clock user has passwordless sudo access
+# - SSH password authentication is disabled unless explicitly enabled above
+# - THIS FILE WILL BE DELETED after processing for security
+# - WiFi passwords are hashed before being stored
+# - WiFi networks are tried in order of priority (higher numbers first)

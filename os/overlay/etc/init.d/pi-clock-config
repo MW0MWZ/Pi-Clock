@@ -1,0 +1,17 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-config - OpenRC service wrapper for the boot configuration processor
+# Part of Pi-Clock OS
+
+description="Pi-Clock OS boot configuration"
+depend() {
+	need localmount
+	after pi-clock-bindmounts
+	before networking wpa_supplicant
+}
+
+start() {
+	ebegin "Processing Pi-Clock boot configuration"
+	/usr/local/bin/pi-clock-config
+	eend $?
+}

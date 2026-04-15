@@ -1,0 +1,32 @@
+# Contributor: MW0MWZ <andy@mw0mwz.co.uk>
+# Maintainer: MW0MWZ <andy@mw0mwz.co.uk>
+pkgname=pi-clock-dashboard
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Pi-Clock web management dashboard"
+url="https://github.com/MW0MWZ/Pi-Clock"
+arch="armhf aarch64"
+license="GPL-2.0-only"
+depends="pi-clock-renderer"
+makedepends="go"
+install="$pkgname.post-install $pkgname.post-upgrade"
+source=""
+options="!check"
+
+_srcroot="/src"
+
+build() {
+	cp -r "$_srcroot/dashboard" "$srcdir/dashboard"
+	cd "$srcdir/dashboard"
+	CGO_ENABLED=0 go build \
+		-ldflags "-s -w -X main.version=$pkgver" \
+		-o pi-clock-dashboard .
+}
+
+package() {
+	install -Dm755 "$srcdir/dashboard/pi-clock-dashboard" \
+		"$pkgdir"/usr/bin/pi-clock-dashboard
+
+	install -Dm755 "$startdir"/pi-clock-dashboard.initd \
+		"$pkgdir"/etc/init.d/pi-clock-dashboard
+}

@@ -1,0 +1,49 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-bindmounts - Bind mount persistent /data/etc dirs over /etc
+# Part of Pi-Clock OS
+
+description="Bind mount /data/etc/* directories over /etc/*"
+
+depend() {
+	need localmount
+	before pi-clock-config networking wpa_supplicant dropbear
+}
+
+start() {
+	ebegin "Bind mounting persistent /data/etc directories"
+
+	for src in /data/etc/*/; do
+		[ -d "$src" ] || continue
+		name="${src%/}"
+		name="${name##*/}"
+		dest="/etc/$name"
+
+		# Skip if no matching rootfs directory
+		[ -d "$dest" ] || continue
+
+		# Seed empty /data dirs from rootfs defaults
+		if [ -z "$(ls -A "$src" 2>/dev/null)" ]; then
+			cp -a "$dest/." "$src/"
+		fi
+
+		mount --bind "$src" "$dest"
+	done
+
+	eend 0
+}
+
+stop() {
+	ebegin "Unmounting persistent /data/etc directories"
+
+	for src in /data/etc/*/; do
+		[ -d "$src" ] || continue
+		name="${src%/}"
+		name="${name##*/}"
+		dest="/etc/$name"
+
+		mountpoint -q "$dest" && umount "$dest"
+	done
+
+	eend 0
+}

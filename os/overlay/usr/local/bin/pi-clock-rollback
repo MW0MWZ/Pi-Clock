@@ -1,0 +1,90 @@
+#!/bin/sh
+# pi-clock-rollback - Revert to previous A/B slot
+# Part of Pi-Clock OS
+# Based on Pi-Star OS rollback system (GPL-2.0)
+
+set -e
+
+SLOT_CONF="/boot/firmware/slot.conf"
+CMDLINE="/boot/firmware/cmdline.txt"
+
+die() { echo "Error: $*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "must be run as root"
+[ -f "$SLOT_CONF" ] || die "$SLOT_CONF not found"
+
+# Validate slot.conf before sourcing — FAT32 is writable with SD card access
+if grep -qvE '^([A-Z_]+=|#|$)' "$SLOT_CONF" 2>/dev/null; then
+	die "slot.conf contains invalid lines"
+fi
+# shellcheck disable=SC1090
+. "$SLOT_CONF"
+
+FORCE=false
+[ "$1" = "--force" ] && FORCE=true
+
+[ -n "$PREVIOUS_SLOT" ] || die "no previous slot to roll back to"
+
+# Map slot letter to partition number
+case "$PREVIOUS_SLOT" in
+	A) PREV_PART="2" ;;
+	B) PREV_PART="3" ;;
+	*) die "invalid PREVIOUS_SLOT: $PREVIOUS_SLOT" ;;
+esac
+
+PREV_DEV="/dev/mmcblk0p${PREV_PART}"
+PREV_MNT="/tmp/rollback-mnt"
+
+echo "Rolling back to slot $PREVIOUS_SLOT (partition $PREV_PART)..."
+
+# Mount previous slot's rootfs and copy kernel files
+mkdir -p "$PREV_MNT"
+cleanup() { umount "$PREV_MNT" 2>/dev/null; rmdir "$PREV_MNT" 2>/dev/null; }
+trap cleanup EXIT
+
+mount -o ro "$PREV_DEV" "$PREV_MNT" || die "failed to mount $PREV_DEV"
+
+if [ ! -d "$PREV_MNT/boot/firmware" ]; then
+	die "no /boot/firmware in previous slot rootfs"
+fi
+
+for f in "$PREV_MNT"/boot/firmware/kernel*.img \
+         "$PREV_MNT"/boot/firmware/vmlinuz* \
+         "$PREV_MNT"/boot/firmware/*.dtb; do
+	[ -f "$f" ] || continue
+	cp "$f" /boot/firmware/
+done
+
+umount "$PREV_MNT"
+rmdir "$PREV_MNT"
+trap - EXIT
+
+# Update cmdline.txt root= parameter
+if [ -f "$CMDLINE" ]; then
+	sed -i "s|root=/dev/mmcblk0p[0-9]*|root=/dev/mmcblk0p${PREV_PART}|" "$CMDLINE"
+else
+	die "$CMDLINE not found"
+fi
+
+# Update slot.conf: swap ACTIVE and PREVIOUS
+# Write to temp file first — safer against power loss than in-place truncation
+cat > "${SLOT_CONF}.tmp" <<EOF
+ACTIVE_SLOT=$PREVIOUS_SLOT
+PREVIOUS_SLOT=$ACTIVE_SLOT
+PENDING=false
+BOOT_TRIES=0
+SLOT_A_VERSION="$SLOT_A_VERSION"
+SLOT_B_VERSION="$SLOT_B_VERSION"
+EOF
+sync
+mv "${SLOT_CONF}.tmp" "$SLOT_CONF"
+sync
+
+echo "Rollback to slot $PREVIOUS_SLOT complete."
+
+if [ "$FORCE" = "true" ]; then
+	echo "Force mode: rebooting now..."
+	reboot
+else
+	echo "Reboot to activate: sudo reboot"
+fi

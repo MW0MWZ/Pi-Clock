@@ -1,0 +1,9 @@
+#!/bin/sh
+# Force-stop the old renderer and start the new one.
+# A graceful restart can hang if the old binary's thread shutdown
+# is slow (e.g., waiting on a DX cluster recv timeout).
+rc-service pi-clock-renderer stop 2>/dev/null
+killall -9 pi-clock 2>/dev/null
+rc-service pi-clock-renderer zap 2>/dev/null
+rc-service pi-clock-renderer start 2>/dev/null
+exit 0

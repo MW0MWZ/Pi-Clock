@@ -1,0 +1,68 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-health-check - Validate new slot and clear PENDING state
+# Part of Pi-Clock OS
+#
+# For Pi-Clock, a healthy boot means the renderer is running
+# and driving the display. Network is optional (offline-first design)
+# but we check for it as a secondary indicator.
+
+description="Pi-Clock OS health check (validates A/B slot after upgrade)"
+depend() {
+	after networking pi-clock-boot-watchdog
+}
+
+SLOT_CONF="/boot/firmware/slot.conf"
+HEALTH_WAIT=30
+
+start() {
+	[ -f "$SLOT_CONF" ] || return 0
+
+	# shellcheck disable=SC1090
+	. "$SLOT_CONF"
+
+	# Only act when a new slot is pending validation
+	[ "$PENDING" = "true" ] || return 0
+
+	ebegin "Health check: waiting ${HEALTH_WAIT}s for system to stabilise"
+	sleep "$HEALTH_WAIT"
+
+	HEALTHY=false
+
+	# Primary check: is the renderer process running?
+	if pgrep -x pi-clock >/dev/null 2>&1; then
+		HEALTHY=true
+		einfo "Renderer is running"
+	fi
+
+	# Secondary check: network connectivity (nice to have, not required)
+	for iface in eth0 wlan0; do
+		if ip addr show "$iface" 2>/dev/null | grep -q 'inet '; then
+			HEALTHY=true
+			einfo "Network interface $iface has an IP address"
+			break
+		fi
+	done
+
+	if [ "$HEALTHY" = "true" ]; then
+		einfo "Health check passed - marking slot $ACTIVE_SLOT as good"
+		PENDING=false
+		BOOT_TRIES=0
+		cat > "${SLOT_CONF}.tmp" <<EOF
+ACTIVE_SLOT=$ACTIVE_SLOT
+PREVIOUS_SLOT=$PREVIOUS_SLOT
+PENDING=false
+BOOT_TRIES=0
+SLOT_A_VERSION="$SLOT_A_VERSION"
+SLOT_B_VERSION="$SLOT_B_VERSION"
+EOF
+		sync
+		mv "${SLOT_CONF}.tmp" "$SLOT_CONF"
+		sync
+		eend 0
+	else
+		ewarn "Health check failed - neither renderer nor network detected"
+		ewarn "Slot $ACTIVE_SLOT remains PENDING (watchdog will handle rollback)"
+		eend 1
+	fi
+}

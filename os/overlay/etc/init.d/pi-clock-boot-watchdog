@@ -1,0 +1,65 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-boot-watchdog - Increment boot counter and auto-rollback on repeated failures
+# Part of Pi-Clock OS
+
+description="Pi-Clock OS boot watchdog (A/B slot failure detection)"
+depend() {
+	need localmount
+	before pi-clock-health-check
+}
+
+SLOT_CONF="/boot/firmware/slot.conf"
+MAX_TRIES=3
+
+# Atomic slot.conf write — write to temp file, sync, then rename.
+# FAT32 rename is not truly atomic but is far safer than in-place
+# truncation which produces an empty file on power loss.
+write_slot_conf() {
+	cat > "${SLOT_CONF}.tmp" <<EOF
+ACTIVE_SLOT=$ACTIVE_SLOT
+PREVIOUS_SLOT=$PREVIOUS_SLOT
+PENDING=$PENDING
+BOOT_TRIES=$BOOT_TRIES
+SLOT_A_VERSION="$SLOT_A_VERSION"
+SLOT_B_VERSION="$SLOT_B_VERSION"
+EOF
+	sync
+	mv "${SLOT_CONF}.tmp" "$SLOT_CONF"
+	sync
+}
+
+start() {
+	[ -f "$SLOT_CONF" ] || return 0
+
+	# shellcheck disable=SC1090
+	. "$SLOT_CONF"
+
+	# Validate slot.conf — protect against corrupt or empty files
+	case "$ACTIVE_SLOT" in
+		A|B) ;;
+		*) ewarn "Invalid ACTIVE_SLOT '$ACTIVE_SLOT' — skipping watchdog"
+		   return 0 ;;
+	esac
+	case "$BOOT_TRIES" in
+		''|*[!0-9]*) BOOT_TRIES=0 ;;
+	esac
+
+	# Only act when a new slot is pending validation
+	[ "$PENDING" = "true" ] || return 0
+
+	BOOT_TRIES=$((BOOT_TRIES + 1))
+
+	ebegin "Boot watchdog: try $BOOT_TRIES of $MAX_TRIES for slot $ACTIVE_SLOT"
+
+	if [ "$BOOT_TRIES" -gt "$MAX_TRIES" ]; then
+		ewarn "Max boot tries exceeded - rolling back to slot $PREVIOUS_SLOT"
+		/usr/local/bin/pi-clock-rollback --force
+		return 1
+	fi
+
+	# Write updated boot counter
+	write_slot_conf
+
+	eend 0
+}

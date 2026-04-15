@@ -1,0 +1,68 @@
+# Contributor: MW0MWZ <andy@mw0mwz.co.uk>
+# Maintainer: MW0MWZ <andy@mw0mwz.co.uk>
+pkgname=pi-clock-maps
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Pi-Clock map images and geodata"
+url="https://github.com/MW0MWZ/Pi-Clock"
+arch="noarch"
+license="custom:public-domain"
+depends=""
+makedepends="curl imagemagick python3"
+source=""
+options="!check"
+
+_srcroot="/src"
+
+build() {
+	cd "$_srcroot/renderer"
+
+	msg "Generating geodata..."
+	python3 generate_borders.py "$srcdir/borders.dat"
+	python3 generate_timezones.py "$srcdir/timezones.dat"
+	python3 generate_cqzones.py "$srcdir/cqzones.dat"
+
+	msg "Downloading BigCTY..."
+	curl -sL -o "$srcdir/cty.dat" \
+		"https://www.country-files.com/cty/cty.dat"
+
+	msg "Downloading Blue Marble..."
+	curl -sL -o "$srcdir/blue_marble_src.jpg" \
+		"https://neo.gsfc.nasa.gov/archive/bluemarble/bmng/world_2km/world.topo.bathy.200407.3x21600x10800.jpg"
+
+	msg "Downloading Black Marble..."
+	curl -sL -o "$srcdir/black_marble_src.jpg" \
+		"https://eoimages.gsfc.nasa.gov/images/imagerecords/79000/79765/dnb_land_ocean_ice.2012.13500x6750.jpg"
+
+	local spec res name
+	for spec in "3840x2160:4k" "2560x1440:1440p" "1920x1080:1080p" "1280x720:720p"; do
+		res="${spec%%:*}"
+		name="${spec##*:}"
+		mkdir -p "$srcdir/blue_marble" "$srcdir/black_marble"
+
+		msg "Resizing to $name ($res)..."
+		convert "$srcdir/blue_marble_src.jpg" \
+			-filter Lanczos -resize "${res}!" -strip -quality 95 \
+			"$srcdir/blue_marble/blue_marble_${name}.jpg"
+		convert "$srcdir/black_marble_src.jpg" \
+			-filter Lanczos -resize "${res}!" -strip -quality 95 \
+			"$srcdir/black_marble/black_marble_${name}.jpg"
+	done
+
+	rm -f "$srcdir/blue_marble_src.jpg" "$srcdir/black_marble_src.jpg"
+}
+
+package() {
+	DEST="$pkgdir/usr/share/pi-clock/maps"
+
+	local mapdir
+	for mapdir in blue_marble black_marble; do
+		mkdir -p "$DEST/$mapdir"
+		cp "$srcdir/$mapdir"/*.jpg "$DEST/$mapdir/"
+	done
+
+	install -Dm644 "$srcdir/borders.dat" "$DEST/borders.dat"
+	install -Dm644 "$srcdir/timezones.dat" "$DEST/timezones.dat"
+	install -Dm644 "$srcdir/cqzones.dat" "$DEST/cqzones.dat"
+	install -Dm644 "$srcdir/cty.dat" "$DEST/cty.dat"
+}

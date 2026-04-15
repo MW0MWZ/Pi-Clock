@@ -1,0 +1,187 @@
+#!/bin/sh
+# pi-clock-upgrade - Download and install update to inactive A/B slot
+# Part of Pi-Clock OS
+# Based on Pi-Star OS upgrade system (GPL-2.0)
+
+set -e
+
+SLOT_CONF="/boot/firmware/slot.conf"
+CMDLINE="/boot/firmware/cmdline.txt"
+OS_CONF="/etc/pi-clock-os.conf"
+TMP_DIR="/data/tmp"
+
+die() { echo "Error: $*" >&2; exit 1; }
+
+usage() {
+	echo "Usage: pi-clock-upgrade [--check | --install]"
+	echo "  --check    Check for available updates"
+	echo "  --install  Download and install update to inactive slot"
+	exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must be run as root"
+[ -f "$SLOT_CONF" ] || die "$SLOT_CONF not found"
+[ -f "$OS_CONF" ] || die "$OS_CONF not found"
+
+# Validate slot.conf before sourcing — it lives on the FAT32 boot
+# partition which is writable by anyone with SD card access.
+if grep -qvE '^([A-Z_]+=|#|$)' "$SLOT_CONF" 2>/dev/null; then
+	die "slot.conf contains invalid lines"
+fi
+# shellcheck disable=SC1090
+. "$SLOT_CONF"
+# shellcheck disable=SC1090
+. "$OS_CONF"
+
+# Determine inactive slot
+case "$ACTIVE_SLOT" in
+	A) INACTIVE_SLOT="B"; INACTIVE_PART="3" ;;
+	B) INACTIVE_SLOT="A"; INACTIVE_PART="2" ;;
+	*) die "invalid ACTIVE_SLOT: $ACTIVE_SLOT" ;;
+esac
+
+INACTIVE_DEV="/dev/mmcblk0p${INACTIVE_PART}"
+
+fetch_manifest() {
+	mkdir -p "$TMP_DIR"
+	if ! wget --timeout=30 --tries=3 -q -O "$TMP_DIR/$MANIFEST_FILE" "$UPDATE_URL/$MANIFEST_FILE"; then
+		die "failed to fetch manifest from $UPDATE_URL/$MANIFEST_FILE"
+	fi
+	# Parse manifest as key=value — never source it as shell.
+	# A compromised manifest could execute arbitrary commands if sourced.
+	VERSION=$(grep '^VERSION=' "$TMP_DIR/$MANIFEST_FILE" | head -1 | cut -d= -f2-)
+	BUILD_DATE=$(grep '^BUILD_DATE=' "$TMP_DIR/$MANIFEST_FILE" | head -1 | cut -d= -f2-)
+	ROOTFS_FILENAME=$(grep '^ROOTFS_FILENAME=' "$TMP_DIR/$MANIFEST_FILE" | head -1 | cut -d= -f2-)
+	# Strip any quotes
+	VERSION=$(echo "$VERSION" | tr -d '"'"'")
+	BUILD_DATE=$(echo "$BUILD_DATE" | tr -d '"'"'")
+	ROOTFS_FILENAME=$(echo "$ROOTFS_FILENAME" | tr -d '"'"'")
+	[ -n "$VERSION" ] || die "manifest missing VERSION"
+}
+
+check_update() {
+	fetch_manifest
+
+	# Get current slot version
+	case "$ACTIVE_SLOT" in
+		A) CURRENT_VER="$SLOT_A_VERSION" ;;
+		B) CURRENT_VER="$SLOT_B_VERSION" ;;
+	esac
+
+	echo "Pi-Clock OS Update Check"
+	echo "Current:    ${CURRENT_VER:-unknown}"
+	echo "Available:  ${VERSION:-unknown} (${BUILD_DATE:-unknown})"
+	echo "Active:     Slot $ACTIVE_SLOT"
+	echo "Target:     Slot $INACTIVE_SLOT (partition $INACTIVE_PART)"
+
+	if [ "$VERSION" = "$CURRENT_VER" ]; then
+		echo "Status:     Up to date"
+		return 1
+	else
+		echo "Status:     Update available"
+		return 0
+	fi
+}
+
+install_update() {
+	# STAGE markers are read by the dashboard to show live progress.
+	# Each "STAGE:name" line advances the progress indicator.
+	echo "STAGE:manifest"
+	fetch_manifest
+
+	ROOTFS_FILE="${ROOTFS_FILENAME:-Pi-Clock-${BUILD_DATE}.rootfs.tar.xz}"
+	SHA_FILE="${ROOTFS_FILE}.sha256"
+
+	echo "STAGE:download"
+	echo "Downloading $ROOTFS_FILE..."
+	mkdir -p "$TMP_DIR"
+
+	if ! wget --timeout=30 --tries=3 -O "$TMP_DIR/$ROOTFS_FILE" \
+		"$UPDATE_URL/$ROOTFS_FILE"; then
+		die "failed to download rootfs tarball"
+	fi
+
+	if ! wget --timeout=30 --tries=3 -q -O "$TMP_DIR/$SHA_FILE" \
+		"$UPDATE_URL/$SHA_FILE"; then
+		die "failed to download checksum file"
+	fi
+
+	echo "STAGE:verify"
+	echo "Verifying checksum..."
+	cd "$TMP_DIR"
+	if ! sha256sum -c "$SHA_FILE"; then
+		rm -f "$ROOTFS_FILE" "$SHA_FILE"
+		die "checksum verification failed"
+	fi
+	cd /
+
+	echo "STAGE:format"
+	echo "Formatting $INACTIVE_DEV..."
+	mkfs.ext4 -q -F "$INACTIVE_DEV"
+
+	echo "STAGE:extract"
+	MOUNT_DIR="/mnt/inactive"
+	mkdir -p "$MOUNT_DIR"
+	mount "$INACTIVE_DEV" "$MOUNT_DIR"
+
+	echo "Extracting rootfs to slot $INACTIVE_SLOT..."
+	tar -xJf "$TMP_DIR/$ROOTFS_FILE" -C "$MOUNT_DIR"
+
+	echo "STAGE:boot"
+	echo "Updating boot files for slot $INACTIVE_SLOT..."
+	if [ ! -d "$MOUNT_DIR/boot/firmware" ]; then
+		umount "$MOUNT_DIR"
+		rmdir "$MOUNT_DIR"
+		die "no /boot/firmware in rootfs tarball"
+	fi
+
+	for f in "$MOUNT_DIR"/boot/firmware/kernel*.img \
+	         "$MOUNT_DIR"/boot/firmware/vmlinuz* \
+	         "$MOUNT_DIR"/boot/firmware/*.dtb; do
+		[ -f "$f" ] || continue
+		cp "$f" /boot/firmware/
+	done
+
+	umount "$MOUNT_DIR"
+	rmdir "$MOUNT_DIR"
+
+	echo "STAGE:config"
+	# Update cmdline.txt root= parameter
+	if [ -f "$CMDLINE" ]; then
+		sed -i "s|root=/dev/mmcblk0p[0-9]*|root=/dev/mmcblk0p${INACTIVE_PART}|" "$CMDLINE"
+	else
+		die "$CMDLINE not found"
+	fi
+
+	# Update slot.conf
+	case "$INACTIVE_SLOT" in
+		A) NEW_A_VER="$VERSION"; NEW_B_VER="$SLOT_B_VERSION" ;;
+		B) NEW_A_VER="$SLOT_A_VERSION"; NEW_B_VER="$VERSION" ;;
+	esac
+
+	# Atomic write — temp file + sync + rename
+	cat > "${SLOT_CONF}.tmp" <<EOF
+ACTIVE_SLOT=$INACTIVE_SLOT
+PREVIOUS_SLOT=$ACTIVE_SLOT
+PENDING=true
+BOOT_TRIES=0
+SLOT_A_VERSION="$NEW_A_VER"
+SLOT_B_VERSION="$NEW_B_VER"
+EOF
+	sync
+	mv "${SLOT_CONF}.tmp" "$SLOT_CONF"
+	sync
+
+	# Clean up downloaded files
+	rm -f "$TMP_DIR/$ROOTFS_FILE" "$TMP_DIR/$SHA_FILE" "$TMP_DIR/$MANIFEST_FILE"
+
+	echo "STAGE:done"
+	echo "Update installed to slot $INACTIVE_SLOT (version $VERSION)."
+	echo "Reboot to activate."
+}
+
+case "$1" in
+	--check)   check_update ;;
+	--install) install_update ;;
+	*)         usage ;;
+esac

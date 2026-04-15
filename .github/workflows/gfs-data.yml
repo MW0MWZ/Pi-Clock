@@ -1,0 +1,60 @@
+# GFS Weather Data Update — fetches NOAA GFS surface weather data
+# every 6 hours and publishes a compact binary to gh-pages.
+# Includes: wind (U/V), cloud cover (TCDC), precipitation (APCP).
+#
+# Data source: NOAA Global Forecast System (GFS) via NOMADS
+# Public domain, no authentication required.
+#
+# Schedule aligns with GFS cycles (00, 06, 12, 18 UTC) plus a 4-hour
+# delay for data availability. The cron runs at 04:30, 10:30, 16:30, 22:30.
+
+name: Update GFS Data
+
+on:
+  schedule:
+    # Run 4.5 hours after each GFS cycle to ensure data is available
+    - cron: '30 4,10,16,22 * * *'
+  workflow_dispatch:
+    # Allow manual trigger for testing
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-gfs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Install ecCodes tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libeccodes-tools
+
+      - name: Checkout GFS fetch script from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-src
+          sparse-checkout: .github/fetch-gfs.py
+
+      - name: Fetch and convert GFS data
+        run: |
+          mkdir -p data
+          python3 main-src/.github/fetch-gfs.py data/gfs.bin.gz
+
+      - name: Publish to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/gfs.bin.gz
+          git diff --cached --quiet && echo "No changes" || {
+            git commit -m "GFS data update $(date -u +%Y-%m-%d\ %H:%M\ UTC)"
+            # Rebase on remote in case gh-pages was updated between
+            # our checkout and now (e.g., manual page edits or squash)
+            git pull --rebase origin gh-pages || true
+            git push
+          }

@@ -1,0 +1,57 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-data-resize - Expand /data partition on first boot
+# Part of Pi-Clock OS
+#
+# Two-phase resize with automatic reboot:
+#   Phase 1: parted expands the partition table entry, then reboots
+#   Phase 2: kernel sees the real size at boot, resize2fs grows the fs
+
+description="Pi-Clock OS first-boot /data partition resize"
+depend() {
+	before localmount
+}
+
+DATA_DEV="/dev/mmcblk0p4"
+DISK_DEV="/dev/mmcblk0"
+PART_NUM=4
+
+start() {
+	ebegin "Checking if /data partition needs resizing"
+
+	# parted reads the ON-DISK partition table
+	PART_END=$(/usr/sbin/parted -ms "$DISK_DEV" unit s print 2>/dev/null | \
+		grep "^${PART_NUM}:" | cut -d: -f3 | tr -d 's')
+	DISK_END=$(/usr/sbin/parted -ms "$DISK_DEV" unit s print 2>/dev/null | \
+		grep "^${DISK_DEV}:" | cut -d: -f2 | tr -d 's')
+
+	if [ -z "$PART_END" ] || [ -z "$DISK_END" ]; then
+		ewarn "Could not determine partition layout"
+		eend 1
+		return 1
+	fi
+
+	SLACK=$(( DISK_END - PART_END ))
+
+	if [ "$SLACK" -ge 32768 ]; then
+		# Phase 1: partition table needs expanding
+		einfo "Expanding /data partition to fill SD card..."
+		/usr/sbin/parted -s "$DISK_DEV" resizepart "$PART_NUM" 100%
+		einfo "Rebooting so kernel picks up new partition size..."
+		eend 0
+		sync
+		reboot
+		return 0
+	fi
+
+	# Phase 2: partition is expanded, grow the filesystem
+	/usr/sbin/e2fsck -fy "$DATA_DEV" >/dev/null 2>&1 || true
+	/usr/sbin/resize2fs "$DATA_DEV"
+
+	einfo "/data partition resized successfully"
+
+	# Done — disable this service permanently
+	rc-update del pi-clock-data-resize boot
+
+	eend 0
+}

@@ -1,0 +1,668 @@
+name: Build Pi-Clock OS Image
+
+on:
+  schedule:
+    # Quarterly: 1st of Jan/Apr/Jul/Oct at 2 AM UTC
+    - cron: '0 2 1 */3 *'
+  repository_dispatch:
+    types: [packages-updated]
+  workflow_dispatch:
+    inputs:
+      force_build:
+        type: boolean
+        description: 'Force build even if no upstream changes'
+        required: false
+        default: false
+  workflow_call:
+    inputs:
+      force_build:
+        type: boolean
+        required: false
+        default: true
+
+env:
+  ALPINE_VERSION: "3.23"
+  IMAGE_SIZE: "3500M"
+  BOOT_SIZE: "257MiB"
+  SLOT_A_END: "1793MiB"
+  SLOT_B_END: "3329MiB"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Checkout gh-pages for version check
+      uses: actions/checkout@v6
+      with:
+        ref: gh-pages
+        path: gh-pages-ver
+      continue-on-error: true
+
+    - name: Set build date and version
+      id: set-date
+      run: |
+        BUILD_DATE=$(date +'%Y-%m-%d')
+
+        # Version format: YYYY-MM-DDrN (date + revision)
+        # Check existing latest.json to auto-increment revision
+        REV=0
+        if [ -f gh-pages-ver/latest.json ]; then
+          LAST_VER=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' gh-pages-ver/latest.json | cut -d'"' -f4)
+          LAST_DATE=$(echo "$LAST_VER" | sed 's/r[0-9]*//')
+          if [ "$LAST_DATE" = "$BUILD_DATE" ]; then
+            LAST_REV=$(echo "$LAST_VER" | grep -o 'r[0-9]*' | tr -d 'r')
+            REV=$((LAST_REV + 1))
+          fi
+        fi
+
+        VERSION="${BUILD_DATE}r${REV}"
+        IMAGE_PREFIX="Pi-Clock"
+        ALPINE_ARCH="armhf"
+        echo "date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "BUILD_DATE=$BUILD_DATE" >> "$GITHUB_ENV"
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        echo "IMAGE_PREFIX=$IMAGE_PREFIX" >> "$GITHUB_ENV"
+        echo "ALPINE_ARCH=$ALPINE_ARCH" >> "$GITHUB_ENV"
+        echo "Build version: $VERSION ($ALPINE_ARCH)"
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          qemu-user-static \
+          binfmt-support \
+          parted \
+          kpartx \
+          dosfstools \
+          e2fsprogs \
+          wget \
+          curl \
+          xz-utils \
+          fdisk \
+          util-linux \
+          rsync \
+          git \
+          jq \
+          coreutils
+
+    - name: Set up QEMU for ARM emulation
+      run: |
+        sudo update-binfmts --display
+        sudo update-binfmts --enable qemu-arm
+        sudo update-binfmts --enable qemu-aarch64
+
+    - name: Create 4-partition image
+      run: |
+        echo "Creating ${IMAGE_SIZE} image with A/B partition layout..."
+        truncate -s "${IMAGE_SIZE}" pi-clock.img
+
+        # Partition layout:
+        #   P1: boot (FAT32)  1MiB - 257MiB    = 256 MiB
+        #   P2: slot A (ext4) 257MiB - 1793MiB  = 1536 MiB
+        #   P3: slot B (ext4) 1793MiB - 3329MiB = 1536 MiB
+        #   P4: data (ext4)   3329MiB - 100%     = ~171 MiB (expands on first boot)
+        parted -s pi-clock.img \
+          mklabel msdos \
+          mkpart primary fat32 1MiB "${BOOT_SIZE}" \
+          mkpart primary ext4 "${BOOT_SIZE}" "${SLOT_A_END}" \
+          mkpart primary ext4 "${SLOT_A_END}" "${SLOT_B_END}" \
+          mkpart primary ext4 "${SLOT_B_END}" 100% \
+          set 1 boot on
+
+    - name: Set up loop device and format partitions
+      run: |
+        LOOP_DEV=$(sudo losetup -f -P --show pi-clock.img)
+        echo "LOOP_DEV=${LOOP_DEV}" >> "$GITHUB_ENV"
+        echo "Using loop device: ${LOOP_DEV}"
+
+        echo "Formatting boot partition (P1)..."
+        sudo mkfs.vfat -F 32 -n BOOT "${LOOP_DEV}p1"
+
+        echo "Formatting slot A partition (P2)..."
+        sudo mkfs.ext4 -L rootfs-a "${LOOP_DEV}p2"
+
+        echo "Formatting slot B partition (P3)..."
+        sudo mkfs.ext4 -L rootfs-b "${LOOP_DEV}p3"
+
+        echo "Formatting data partition (P4)..."
+        sudo mkfs.ext4 -L data "${LOOP_DEV}p4"
+
+        # Mount partitions
+        sudo mkdir -p /mnt/{boot,root,data}
+        sudo mount "${LOOP_DEV}p1" /mnt/boot
+        sudo mount "${LOOP_DEV}p2" /mnt/root
+        sudo mount "${LOOP_DEV}p4" /mnt/data
+
+    - name: Install Alpine Linux rootfs
+      run: |
+        ALPINE_MIRROR="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}"
+
+        echo "Searching for Alpine rootfs files..."
+        ALPINE_FILE=$(curl -s "${ALPINE_MIRROR}/releases/${ALPINE_ARCH}/" | \
+                      grep -o 'alpine-minirootfs[^"<]*\.tar\.gz' | \
+                      grep "${ALPINE_VERSION}" | \
+                      head -1)
+
+        if [ -z "$ALPINE_FILE" ]; then
+          PATCH_VERSION=$(curl -s "${ALPINE_MIRROR}/releases/${ALPINE_ARCH}/" | \
+                          grep -o "alpine-minirootfs-${ALPINE_VERSION}\.[0-9]*-${ALPINE_ARCH}\.tar\.gz" | \
+                          sed "s/.*-${ALPINE_VERSION}\.\([0-9]*\)-.*/\1/" | \
+                          sort -n | tail -1)
+          if [ -n "$PATCH_VERSION" ]; then
+            ALPINE_FILE="alpine-minirootfs-${ALPINE_VERSION}.${PATCH_VERSION}-${ALPINE_ARCH}.tar.gz"
+          else
+            ALPINE_FILE="alpine-minirootfs-${ALPINE_VERSION}.0-${ALPINE_ARCH}.tar.gz"
+          fi
+        fi
+
+        echo "Found Alpine rootfs: ${ALPINE_FILE}"
+        FULL_URL="${ALPINE_MIRROR}/releases/${ALPINE_ARCH}/${ALPINE_FILE}"
+
+        curl -L -f -o "${ALPINE_FILE}" "${FULL_URL}" || {
+          echo "Download failed!"
+          exit 1
+        }
+
+        echo "Extracting Alpine rootfs to /mnt/root/..."
+        sudo tar -xzf "${ALPINE_FILE}" -C /mnt/root/
+
+        sudo cp /usr/bin/qemu-arm-static /mnt/root/usr/bin/
+
+    - name: Configure Alpine base system
+      run: |
+        sudo cp /etc/resolv.conf /mnt/root/etc/resolv.conf
+
+        sudo tee /mnt/root/etc/alpine-build-env << ENV_EOF
+        export ALPINE_VERSION="${ALPINE_VERSION}"
+        export ALPINE_ARCH="${ALPINE_ARCH}"
+        ENV_EOF
+
+        sudo mount -t proc none /mnt/root/proc
+        sudo mount -t sysfs none /mnt/root/sys
+        sudo mount -o bind /dev /mnt/root/dev
+        sudo mount -o bind /dev/pts /mnt/root/dev/pts || true
+
+        cat << 'EOF' | sudo tee /mnt/root/setup-alpine.sh
+        #!/bin/sh
+        set -e
+
+        . /etc/alpine-build-env
+
+        echo "nameserver 8.8.8.8" > /etc/resolv.conf
+        echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+
+        # Add RasPINE repository key (Raspberry Pi kernel packages)
+        wget -O /etc/apk/keys/raspine.rsa.pub https://raspine.pistar.uk/raspine.rsa.pub
+
+        # Add Pi-Clock APK repository key
+        wget -O /etc/apk/keys/pi-clock-apk-signing.rsa.pub \
+          https://pi-clock.pistar.uk/pi-clock-apk-signing.rsa.pub
+
+        # Set up repositories (RasPINE for Pi kernels, Alpine official, Pi-Clock)
+        cat > /etc/apk/repositories << REPOS
+        https://raspine.pistar.uk/v${ALPINE_VERSION}/community
+        https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main
+        https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/community
+        https://pi-clock.pistar.uk/v${ALPINE_VERSION}/pi-clock
+        REPOS
+
+        # Update package index — allow our repo to be unavailable
+        # (it may not have packages yet during initial builds)
+        apk update || echo "WARNING: Some repositories unavailable, continuing..."
+
+        # Install base packages
+        apk add --no-cache \
+          alpine-base \
+          openrc \
+          util-linux \
+          e2fsprogs \
+          e2fsprogs-extra \
+          parted \
+          dropbear \
+          libc6-compat \
+          wpa_supplicant \
+          wireless-tools \
+          wireless-regdb \
+          iw \
+          ca-certificates \
+          ca-certificates-bundle \
+          openssl \
+          sudo \
+          tzdata \
+          dhcpcd
+
+        # Install Raspberry Pi kernels from RasPINE repo
+        rm -rf /lib/firmware
+        ln -s /usr/lib/firmware /lib/firmware
+        rm -d /lib/modules 2>/dev/null || true
+        ln -sf /usr/lib/modules /lib/modules
+        apk add --no-cache --force-overwrite \
+          raspios-firmware \
+          raspios-kernel-v6 \
+          raspios-kernel-v7 \
+          raspios-kernel-v8
+
+        # --force-overwrite kernel install clobbers regulatory.db
+        # from wireless-regdb. Without it, WiFi falls back to the
+        # "world" regulatory domain and scans passively — very slow.
+        apk fix wireless-regdb
+
+        # Install Pi-Clock packages from our APK repository.
+        # The renderer package pulls in all display dependencies
+        # (sdl2, cairo, mesa, libdrm, ttf-dejavu) automatically.
+        # --allow-untrusted: the OS build runs immediately after the
+        # package build pushes to gh-pages. CDN propagation can cause
+        # a brief window where the APKINDEX checksum doesn't match
+        # the APK files. We trust our own packages unconditionally.
+        apk add --no-cache --allow-untrusted \
+          pi-clock-renderer pi-clock-dashboard || {
+          echo "WARNING: Pi-Clock packages not yet in APK repo"
+          echo "Installing display dependencies directly as fallback..."
+          apk add --no-cache \
+            sdl2 cairo mesa-dri-gallium mesa-egl mesa-gl ttf-dejavu libdrm
+        }
+
+        update-ca-certificates
+
+        # Set up essential services
+        rc-update add devfs sysinit
+        rc-update add dmesg sysinit
+        rc-update add hwdrivers sysinit
+        rc-update add mdev sysinit
+        rc-update add modules boot
+        rc-update add sysctl boot
+        rc-update add hostname boot
+        rc-update add bootmisc boot
+        rc-update del hwclock boot 2>/dev/null || true
+        rc-update add swclock boot
+        rc-update add syslog boot
+        rc-update add networking boot
+        rc-update add dropbear default
+        rc-update add wpa_supplicant boot
+        rc-update add dhcpcd boot
+
+        # Keep getty on all TTYs — the renderer runs on tty7,
+        # leaving tty1-6 available for console login (Ctrl+Alt+F1).
+
+        # Configure hostname
+        echo "pi-clock" > /etc/hostname
+        cat > /etc/hosts << HOSTS
+        127.0.0.1   localhost localhost.localdomain
+        127.0.1.1   pi-clock
+        HOSTS
+
+        # Create pi-clock user with sudo access
+        adduser -D -s /bin/sh pi-clock
+        addgroup pi-clock wheel
+        echo "pi-clock:raspberry" | chpasswd
+        echo "%wheel ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/wheel
+        passwd -l root
+
+        # Configure SSH (key-only by default)
+        mkdir -p /etc/conf.d
+        echo 'DROPBEAR_OPTS="-B -s"' > /etc/conf.d/dropbear
+        echo 'wpa_supplicant_args="-q"' > /etc/conf.d/wpa_supplicant
+
+        # Create necessary directories
+        mkdir -p /boot/firmware
+        mkdir -p /var/log
+        mkdir -p /usr/local/bin
+        mkdir -p /usr/share/pi-clock/maps
+        mkdir -p /home/pi-clock
+        chown pi-clock:pi-clock /home/pi-clock
+
+        # WiFi modules
+        cat >> /etc/modules << MODULES
+        brcmfmac
+        brcmutil
+        cfg80211
+        rfkill
+        i2c-dev
+        spidev
+        MODULES
+
+        mkdir -p /etc/modprobe.d
+        cat > /etc/modprobe.d/raspi-wifi.conf << MODCONF
+        options brcmfmac roamoff=1
+        options brcmfmac feature_disable=0x82000
+        MODCONF
+
+        cat > /etc/modprobe.d/cfg80211.conf << REGCONF
+        options cfg80211 ieee80211_regdom=GB
+        REGCONF
+
+        cat > /etc/modprobe.d/rfkill_default.conf << RFKILLCONF
+        options rfkill default_state=1 master_switch_mode=2
+        RFKILLCONF
+
+        # GPU/display modules for DRM/KMS
+        cat >> /etc/modules << GPUMOD
+        vc4
+        v3d
+        GPUMOD
+
+        rm -f /boot/initramfs 2>/dev/null || true
+
+        echo "Alpine base system configured for Pi-Clock OS"
+        EOF
+
+        sudo chmod +x /mnt/root/setup-alpine.sh
+        sudo chroot /mnt/root /setup-alpine.sh
+
+        sudo rm /mnt/root/setup-alpine.sh
+        sudo rm /mnt/root/etc/alpine-build-env
+
+        sudo umount /mnt/root/dev/pts 2>/dev/null || true
+        sudo umount /mnt/root/dev
+        sudo umount /mnt/root/sys
+        sudo umount /mnt/root/proc
+
+    - name: Configure networking
+      run: |
+        sudo tee /mnt/root/etc/dhcpcd.conf << 'EOF'
+        # Pi-Clock OS dhcpcd configuration
+        hostname
+        clientid
+        persistent
+        option rapid_commit
+        option domain_name_servers, domain_name, domain_search, host_name
+        option classless_static_routes
+        option interface_mtu
+        require dhcp_server_identifier
+        slaac hwaddr
+        nocarrier
+        waitip 4
+        nohook wpa_supplicant
+        EOF
+
+        sudo mkdir -p /mnt/root/usr/lib/dhcpcd/dhcpcd-hooks
+        sudo tee /mnt/root/usr/lib/dhcpcd/dhcpcd-hooks/30-time-sync << 'EOF'
+        #!/bin/sh
+        case "$reason" in
+        BOUND|INFORM|REBIND|REBOOT)
+            logger -t dhcpcd "Syncing system clock via NTP..."
+            ntpd -q -n -p pool.ntp.org 2>/dev/null || \
+            ntpd -q -n -p time.google.com 2>/dev/null || \
+            ntpd -q -n -p time.cloudflare.com 2>/dev/null || \
+            logger -t dhcpcd "Time sync failed"
+            ;;
+        esac
+        EOF
+        sudo chmod +x /mnt/root/usr/lib/dhcpcd/dhcpcd-hooks/30-time-sync
+
+        sudo tee /mnt/root/etc/network/interfaces << 'EOF'
+        auto lo
+        iface lo inet loopback
+
+        allow-hotplug eth0
+        iface eth0 inet manual
+
+        allow-hotplug wlan0
+        iface wlan0 inet manual
+        EOF
+
+        sudo mkdir -p /mnt/root/etc/wpa_supplicant
+        sudo tee /mnt/root/etc/wpa_supplicant/wpa_supplicant.conf << 'EOF'
+        ctrl_interface=/var/run/wpa_supplicant
+        ctrl_interface_group=0
+        update_config=1
+        country=GB
+        EOF
+
+    - name: Apply Pi-Clock OS overlay
+      run: |
+        echo "Applying Pi-Clock OS overlay files..."
+
+        # Copy fstab
+        sudo cp os/overlay/etc/fstab /mnt/root/etc/fstab
+
+        # Copy configuration
+        sudo cp os/overlay/etc/pi-clock-os.conf /mnt/root/etc/pi-clock-os.conf
+
+        # Copy scripts
+        sudo cp os/overlay/usr/local/bin/pi-clock-upgrade /mnt/root/usr/local/bin/
+        sudo cp os/overlay/usr/local/bin/pi-clock-rollback /mnt/root/usr/local/bin/
+        sudo cp os/overlay/usr/local/bin/pi-clock-slot-info /mnt/root/usr/local/bin/
+        sudo cp os/overlay/usr/local/bin/pi-clock-config /mnt/root/usr/local/bin/
+        sudo chmod +x /mnt/root/usr/local/bin/pi-clock-*
+
+        # Copy init scripts
+        sudo cp os/overlay/etc/init.d/pi-clock-config /mnt/root/etc/init.d/
+        sudo cp os/overlay/etc/init.d/pi-clock-boot-watchdog /mnt/root/etc/init.d/
+        sudo cp os/overlay/etc/init.d/pi-clock-health-check /mnt/root/etc/init.d/
+        sudo cp os/overlay/etc/init.d/pi-clock-data-resize /mnt/root/etc/init.d/
+        sudo cp os/overlay/etc/init.d/pi-clock-bindmounts /mnt/root/etc/init.d/
+        sudo cp os/overlay/etc/init.d/pi-clock-splash /mnt/root/etc/init.d/
+        sudo cp os/overlay/etc/init.d/pi-clock-renderer /mnt/root/etc/init.d/
+        sudo cp os/overlay/etc/init.d/pi-clock-dashboard /mnt/root/etc/init.d/
+        sudo chmod +x /mnt/root/etc/init.d/pi-clock-*
+
+        # Enable Pi-Clock OS services
+        sudo ln -sf /etc/init.d/pi-clock-bindmounts /mnt/root/etc/runlevels/boot/pi-clock-bindmounts
+        sudo ln -sf /etc/init.d/pi-clock-config /mnt/root/etc/runlevels/boot/pi-clock-config
+        sudo ln -sf /etc/init.d/pi-clock-boot-watchdog /mnt/root/etc/runlevels/boot/pi-clock-boot-watchdog
+        sudo ln -sf /etc/init.d/pi-clock-health-check /mnt/root/etc/runlevels/default/pi-clock-health-check
+        sudo ln -sf /etc/init.d/pi-clock-data-resize /mnt/root/etc/runlevels/boot/pi-clock-data-resize
+        sudo ln -sf /etc/init.d/pi-clock-splash /mnt/root/etc/runlevels/sysinit/pi-clock-splash
+        sudo ln -sf /etc/init.d/pi-clock-renderer /mnt/root/etc/runlevels/default/pi-clock-renderer
+        sudo ln -sf /etc/init.d/pi-clock-dashboard /mnt/root/etc/runlevels/default/pi-clock-dashboard
+
+        # Create bind-mount stub directories in rootfs
+        sudo mkdir -p /mnt/root/home
+        sudo mkdir -p /mnt/root/etc/dropbear
+        sudo mkdir -p /mnt/root/etc/wpa_supplicant
+        sudo mkdir -p /mnt/root/data
+
+        echo "Overlay applied"
+
+    - name: Configure boot partition with A/B slot support
+      run: |
+        # Copy boot files from rootfs to boot partition
+        if [ -d /mnt/root/boot/firmware ] && [ -n "$(find /mnt/root/boot/firmware -maxdepth 1 -mindepth 1 -print -quit)" ]; then
+          sudo cp -a /mnt/root/boot/firmware/* /mnt/boot/
+        else
+          echo "ERROR: No boot files found in /boot/firmware"
+          exit 1
+        fi
+
+        # Verify critical boot files
+        if [ ! -f /mnt/boot/cmdline.txt ] || [ ! -f /mnt/boot/config.txt ]; then
+          echo "ERROR: Critical boot files missing"
+          exit 1
+        fi
+
+        # Ensure cmdline.txt points to slot A (P2)
+        sudo sed -i 's|root=/dev/mmcblk0p[0-9]*|root=/dev/mmcblk0p2|' /mnt/boot/cmdline.txt
+        if ! grep -q 'fsck.repair=yes' /mnt/boot/cmdline.txt; then
+          sudo sed -i 's/$/ fsck.repair=yes/' /mnt/boot/cmdline.txt
+        fi
+        # Default 1080p 32bpp video mode for DRM fbdev (Pi 5 KMS).
+        # Harmless on non-KMS models — legacy FB ignores this.
+        if ! grep -q 'video=' /mnt/boot/cmdline.txt; then
+          sudo sed -i 's/$/ video=HDMI-A-1:1920x1080-32@60/' /mnt/boot/cmdline.txt
+        fi
+
+        echo "cmdline.txt: $(cat /mnt/boot/cmdline.txt)"
+
+        # Write slot.conf
+        sudo cp os/overlay/boot/firmware/slot.conf /mnt/boot/slot.conf
+        sudo sed -i "s/^SLOT_A_VERSION=.*/SLOT_A_VERSION=\"${VERSION} (${BUILD_DATE})\"/" /mnt/boot/slot.conf
+
+        # Boot at low resolution for fast startup (1024x768).
+        # The pi-clock-renderer init script detects the monitor's native
+        # resolution from EDID and switches the framebuffer before
+        # starting the renderer.
+        # Replace config.txt with the Pi-Clock static config for this arch.
+        # Static files are simpler and more reliable than script modification.
+        sudo cp os/config-armhf.txt /mnt/boot/config.txt
+
+        echo "Boot partition configured with A/B slot support"
+
+    - name: Create sample configuration file
+      run: |
+        sudo cp pi-clock-config.txt.sample /mnt/boot/pi-clock-config.txt.sample
+
+    - name: Create /data skeleton
+      run: |
+        echo "Creating /data partition skeleton..."
+
+        sudo mkdir -p /mnt/data/etc/dropbear
+        sudo mkdir -p /mnt/data/etc/wpa_supplicant
+        sudo mkdir -p /mnt/data/home/pi-clock
+        sudo mkdir -p /mnt/data/tmp
+
+        # Copy default SSH host keys
+        if [ -d /mnt/root/etc/dropbear ]; then
+          sudo cp /mnt/root/etc/dropbear/* /mnt/data/etc/dropbear/ 2>/dev/null || true
+        fi
+
+        # Copy default wpa_supplicant config
+        if [ -f /mnt/root/etc/wpa_supplicant/wpa_supplicant.conf ]; then
+          sudo cp /mnt/root/etc/wpa_supplicant/wpa_supplicant.conf /mnt/data/etc/wpa_supplicant/
+        fi
+
+        # Set ownership for pi-clock home
+        PIC_UID=$(grep '^pi-clock:' /mnt/root/etc/passwd | cut -d: -f3)
+        PIC_GID=$(grep '^pi-clock:' /mnt/root/etc/passwd | cut -d: -f4)
+        sudo chown "${PIC_UID}:${PIC_GID}" /mnt/data/home/pi-clock
+
+        echo "/data skeleton created"
+
+    - name: Create system information file
+      run: |
+        sudo tee /mnt/root/etc/pi-clock-os-release << EOF
+        Pi-Clock OS
+        Build Date: ${BUILD_DATE}
+        Version: ${VERSION}
+        Alpine Version: ${ALPINE_VERSION}
+        Architecture: ${ALPINE_ARCH}
+        Base: RasPINE (Alpine Linux + Raspberry Pi kernel)
+        EOF
+
+    - name: Create rootfs tarball from slot A
+      run: |
+        echo "Creating rootfs tarball from slot A..."
+        cd /mnt/root
+        sudo tar -cJf "/tmp/${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz" .
+        sudo chown "$(id -u):$(id -g)" "/tmp/${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz"
+        cd /
+
+        cd /tmp
+        sha256sum "${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz" > "${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz.sha256"
+
+        echo "Rootfs tarball created:"
+        ls -lh "/tmp/${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz"
+
+    - name: Create manifest
+      run: |
+        cat > /tmp/manifest.txt << EOF
+        VERSION=${VERSION}
+        BUILD_DATE=${BUILD_DATE}
+        ALPINE_VERSION=${ALPINE_VERSION}
+        ROOTFS_FILENAME=${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz
+        EOF
+
+    - name: Cleanup and unmount
+      run: |
+        sudo rm -f /mnt/root/usr/bin/qemu-arm-static
+        sync
+        sudo umount /mnt/data
+        sudo umount /mnt/boot
+        sudo umount /mnt/root
+        sudo losetup -d "${LOOP_DEV}"
+
+    - name: Compress image
+      run: |
+        echo "Compressing image..."
+        xz -9 -T0 pi-clock.img
+        mv pi-clock.img.xz "${IMAGE_PREFIX}-${VERSION}.img.xz"
+
+        sha256sum "${IMAGE_PREFIX}-${VERSION}.img.xz" > "${IMAGE_PREFIX}-${VERSION}.img.xz.sha256"
+
+        echo "Image compressed:"
+        ls -lh "${IMAGE_PREFIX}-${VERSION}.img.xz"
+
+    - name: Collect artifacts
+      run: |
+        mkdir -p artifacts
+        mv "${IMAGE_PREFIX}-${VERSION}.img.xz" artifacts/
+        mv "${IMAGE_PREFIX}-${VERSION}.img.xz.sha256" artifacts/
+        mv "/tmp/${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz" artifacts/
+        mv "/tmp/${IMAGE_PREFIX}-${VERSION}.rootfs.tar.xz.sha256" artifacts/
+        mv /tmp/manifest.txt artifacts/
+
+        echo "Artifacts:"
+        ls -lh artifacts/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: Pi-Clock-${{ env.VERSION }}
+        path: artifacts/
+        retention-days: 90
+
+    - name: Create Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ env.VERSION }}
+        name: Pi-Clock OS ${{ env.VERSION }}
+        draft: false
+        prerelease: false
+        files: |
+          artifacts/*.img.xz
+          artifacts/*.img.xz.sha256
+          artifacts/*.rootfs.tar.xz
+          artifacts/*.rootfs.tar.xz.sha256
+          artifacts/manifest.txt
+        body: |
+          # Pi-Clock OS - ${{ env.VERSION }}
+
+          Open-source world clock display for ham radio operators.
+          Raspberry Pi OS kernel with Alpine Linux ${{ env.ALPINE_VERSION }} userland.
+          A/B root partition scheme for safe, router-style upgrades.
+
+          ## Downloads
+          - **SD card image** (first install): `Pi-Clock-${{ env.VERSION }}.img.xz`
+          - **Rootfs tarball** (upgrades): `Pi-Clock-${{ env.VERSION }}.rootfs.tar.xz`
+
+          ## Upgrade from existing Pi-Clock OS
+          ```
+          sudo pi-clock-upgrade --install
+          ```
+
+          ## Default Credentials
+          - Username: `pi-clock`
+          - Password: `raspberry`
+          - SSH: Enabled (key-only by default)
+
+    - name: Publish latest.json to gh-pages
+      if: github.ref == 'refs/heads/main'
+      run: |
+        cd gh-pages-ver
+        cat > latest.json << LJEOF
+        {
+          "version": "${VERSION}",
+          "date": "${BUILD_DATE}",
+          "image": "Pi-Clock-${VERSION}.img.xz",
+          "rootfs": "Pi-Clock-${VERSION}.rootfs.tar.xz",
+          "url": "https://github.com/MW0MWZ/Pi-Clock/releases/tag/v${VERSION}"
+        }
+        LJEOF
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add latest.json
+        git diff --cached --quiet && echo "No changes" || {
+          git commit -m "Update latest.json to ${VERSION}"
+          git push
+        }
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

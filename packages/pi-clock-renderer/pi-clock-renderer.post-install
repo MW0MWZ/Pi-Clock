@@ -1,0 +1,5 @@
+#!/bin/sh
+rc-update add pi-clock-splash sysinit 2>/dev/null || true
+rc-update add pi-clock-renderer default 2>/dev/null || true
+rc-service pi-clock-renderer start 2>/dev/null || true
+exit 0

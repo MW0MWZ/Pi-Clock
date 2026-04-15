@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pi-Clock - Login</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <script src="/static/js/theme.js"></script>
+</head>
+<body>
+    <div class="login-container">
+        <div class="card login-card">
+            <div class="login-logo">
+                <img src="/static/logo.png" alt="Pi-Clock" width="120" height="120">
+            </div>
+            <h1 class="login-title" style="color:#e8e0d4">Pi-<span style="color:#c9a84c">Clock</span></h1>
+
+            {{if .Error}}
+            <div class="login-error">{{.Error}}</div>
+            {{end}}
+
+            <form method="POST" action="/login">
+                <div class="form-group">
+                    <label for="password" style="color:#a09888">Password</label>
+                    <input type="password" id="password" name="password"
+                           class="form-control" style="background:#333030; color:#e8e0d4; border-color:#504a46"
+                           autocomplete="current-password"
+                           required autofocus>
+                </div>
+                <div class="form-group" style="margin-top:20px">
+                    <button type="submit" class="btn btn-primary"
+                            style="width:100%">Log In</button>
+                </div>
+            </form>
+
+            <div class="footer" style="color:#a09888; border-top-color:#504a46">
+                <div class="footer-version" style="color:#a09888">Pi-Clock {{.Version}}</div>
+                <div class="footer-copyright">&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</div>
+                <div style="margin-top:6px; opacity:0.7;">Built with &#10084;&#65039; for the Amateur Radio community</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

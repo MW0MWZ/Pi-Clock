@@ -1,0 +1,41 @@
+# Contributor: MW0MWZ <andy@mw0mwz.co.uk>
+# Maintainer: MW0MWZ <andy@mw0mwz.co.uk>
+pkgname=pi-clock-renderer
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Pi-Clock world map display renderer"
+url="https://github.com/MW0MWZ/Pi-Clock"
+arch="armhf aarch64"
+license="GPL-2.0-only"
+depends="pi-clock-maps cairo sdl2 mesa-dri-gallium mesa-egl libdrm ttf-dejavu"
+makedepends="build-base cairo-dev sdl2-dev pkgconf"
+install="$pkgname.post-install $pkgname.post-upgrade"
+source=""
+options="!check"
+
+# Source is pre-mounted at /src by the CI build script
+_srcroot="/src"
+
+build() {
+	cp -r "$_srcroot/renderer" "$srcdir/renderer"
+	cd "$srcdir/renderer"
+	make CC="${CC:-gcc}" CFLAGS="${CFLAGS:--Wall -Wextra -O2}" clean all
+}
+
+package() {
+	# Main renderer binary
+	install -Dm755 "$srcdir/renderer/pi-clock" \
+		"$pkgdir"/usr/bin/pi-clock
+
+	# Boot splash binary — displays logo on framebuffer before renderer starts
+	install -Dm755 "$srcdir/renderer/pi-clock-splash" \
+		"$pkgdir"/usr/bin/pi-clock-splash
+
+	# Init scripts
+	install -Dm755 "$startdir"/pi-clock-renderer.initd \
+		"$pkgdir"/etc/init.d/pi-clock-renderer
+	install -Dm755 "$startdir"/pi-clock-splash.initd \
+		"$pkgdir"/etc/init.d/pi-clock-splash
+
+	install -dm755 "$pkgdir"/data/cache
+}

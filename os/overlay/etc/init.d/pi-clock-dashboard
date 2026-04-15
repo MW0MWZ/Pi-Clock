@@ -1,0 +1,19 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-dashboard - Pi-Clock web management dashboard
+# Part of Pi-Clock OS
+#
+# Serves HTTPS on port 443 with auto-generated self-signed certificate.
+# HTTP on port 80 redirects to HTTPS.
+
+description="Pi-Clock web dashboard"
+command="/usr/bin/pi-clock-dashboard"
+command_background=true
+pidfile="/run/pi-clock-dashboard.pid"
+output_log="/var/log/pi-clock-dashboard.log"
+error_log="/var/log/pi-clock-dashboard.log"
+
+depend() {
+	need localmount networking
+	after pi-clock-config pi-clock-renderer
+}

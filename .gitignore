@@ -1,0 +1,34 @@
+# Build artifacts
+build/
+*.o
+*.d
+!**/init.d/
+renderer/opengeoclock
+
+# Dashboard binary
+dashboard/opengeoclock-dashboard
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test output
+*.png
+!assets/*.png
+
+# Map output images (large, downloaded at build time)
+maps/output/
+
+# Temporary files
+temp/
+CLAUDE.md
+Dockerfile
+renderer/pi-clock
+renderer/pi-clock-splash

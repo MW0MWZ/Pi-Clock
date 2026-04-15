@@ -1,0 +1,319 @@
+#!/bin/sh
+# pi-clock-config - Boot configuration processor
+# Part of Pi-Clock OS
+# Based on Pi-Star OS config system (GPL-2.0)
+#
+# Sources, in priority order:
+#   1. /boot/firmware/pi-clock-config.txt  — fresh settings from user
+#   2. /data/etc/pi-clock-user.conf        — saved settings from prior boot
+#
+# When pi-clock-config.txt is present, settings are applied and then
+# persisted to /data/etc/pi-clock-user.conf so they survive A/B upgrades.
+# The pi-clock-config.txt is DELETED after processing for security.
+
+CONFIG_FILE="/boot/firmware/pi-clock-config.txt"
+SAVED_CONF="/data/etc/pi-clock-user.conf"
+SLOT_CONF="/boot/firmware/slot.conf"
+LOG_FILE="/var/log/pi-clock-config.log"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# ── Phase 1: Source selection ────────────────────────────────────────
+SOURCE=""
+if [ -f "$CONFIG_FILE" ]; then
+    SOURCE="$CONFIG_FILE"
+    log "Processing Pi-Clock configuration from pi-clock-config.txt..."
+elif [ -f "$SAVED_CONF" ]; then
+    SOURCE="$SAVED_CONF"
+    log "Applying saved configuration from $SAVED_CONF..."
+else
+    exit 0
+fi
+
+# Log active slot for diagnostics
+if [ -f "$SLOT_CONF" ]; then
+    # shellcheck disable=SC1090
+    . "$SLOT_CONF"
+    log "Active slot: ${ACTIVE_SLOT:-unknown}, pending: ${PENDING:-unknown}"
+fi
+
+# Track which source we came from
+FROM_CONFIG_TXT=false
+[ "$SOURCE" = "$CONFIG_FILE" ] && FROM_CONFIG_TXT=true
+
+# ── Phase 2: Parse and apply ─────────────────────────────────────────
+WIFI_COUNT=0
+SAVE_HOSTNAME=""
+SAVE_TIMEZONE=""
+SAVE_LOCALE=""
+SAVE_SSH_PASSWORD=""
+SAVE_CENTER_LON=""
+SAVE_QTH_LAT=""
+SAVE_QTH_LON=""
+SAVE_CALLSIGN=""
+SAVE_GRID_SQUARE=""
+SAVE_DISPLAY_RES=""
+SAVE_OPEN_NETWORKS=""
+
+while IFS='=' read -r key value; do
+    # Skip comments and empty lines
+    case "$key" in
+        "#"*|"") continue ;;
+    esac
+
+    # Trim whitespace
+    key=$(echo "$key" | tr -d ' ')
+    value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    case "$key" in
+        wifi_ssid|wifi_ssid_*)
+            if $FROM_CONFIG_TXT; then
+                priority="${key#wifi_ssid_}"
+                [ "$priority" = "wifi_ssid" ] && priority=1
+                # Validate priority is a number (1-10) to prevent injection
+                case "$priority" in
+                    [1-9]|10) ;;
+                    *) priority=1 ;;
+                esac
+                eval "WIFI_SSID_${priority}=\"\$value\""
+                WIFI_COUNT=$((WIFI_COUNT + 1))
+                log "Found WiFi network: $value (priority $priority)"
+            fi
+            ;;
+
+        wifi_password|wifi_password_*)
+            if $FROM_CONFIG_TXT; then
+                priority="${key#wifi_password_}"
+                [ "$priority" = "wifi_password" ] && priority=1
+                case "$priority" in
+                    [1-9]|10) ;;
+                    *) priority=1 ;;
+                esac
+                eval "WIFI_PASS_${priority}=\"\$value\""
+            fi
+            ;;
+
+        wifi_country)
+            if $FROM_CONFIG_TXT; then
+                log "Setting WiFi country: $value"
+                WIFI_COUNTRY="$value"
+            fi
+            ;;
+
+        enable_open_networks)
+            SAVE_OPEN_NETWORKS="$value"
+            if [ "$value" = "true" ]; then
+                log "Open network connections enabled"
+            fi
+            ;;
+
+        user_password)
+            if $FROM_CONFIG_TXT; then
+                log "Setting pi-clock user password"
+                echo "pi-clock:$value" | chpasswd
+            fi
+            ;;
+
+        user_password_hash)
+            if ! $FROM_CONFIG_TXT; then
+                log "Restoring pi-clock password hash"
+                sed -i "s|^pi-clock:[^:]*:|pi-clock:${value}:|" /etc/shadow
+            fi
+            ;;
+
+        enable_ssh_password)
+            SAVE_SSH_PASSWORD="$value"
+            if [ "$value" = "true" ]; then
+                log "Enabling SSH password authentication"
+                sed -i 's/DROPBEAR_OPTS=.*/DROPBEAR_OPTS="-B"/' /etc/conf.d/dropbear
+            else
+                log "SSH key-only authentication enabled"
+                sed -i 's/DROPBEAR_OPTS=.*/DROPBEAR_OPTS="-B -s"/' /etc/conf.d/dropbear
+            fi
+            ;;
+
+        ssh_key)
+            if $FROM_CONFIG_TXT; then
+                log "Adding SSH public key"
+                mkdir -p /home/pi-clock/.ssh
+                echo "$value" >> /home/pi-clock/.ssh/authorized_keys
+                chmod 700 /home/pi-clock/.ssh
+                chmod 600 /home/pi-clock/.ssh/authorized_keys
+                chown -R pi-clock:pi-clock /home/pi-clock/.ssh
+            fi
+            ;;
+
+        hostname)
+            # Validate hostname: RFC 952 — letters, digits, hyphens only
+            clean_host=$(echo "$value" | tr -dc 'a-zA-Z0-9-' | head -c 63)
+            if [ -z "$clean_host" ] || [ "${clean_host%"${clean_host#?}"}" = "-" ]; then
+                log "WARNING: invalid hostname '$value', skipping"
+            else
+                SAVE_HOSTNAME="$clean_host"
+                log "Setting hostname: $clean_host"
+                echo "$clean_host" > /etc/hostname
+                hostname "$clean_host"
+                sed -i "s/127.0.1.1.*/127.0.1.1   $clean_host/" /etc/hosts
+            fi
+            ;;
+
+        timezone)
+            SAVE_TIMEZONE="$value"
+            log "Setting timezone: $value"
+            if [ -f "/usr/share/zoneinfo/$value" ]; then
+                cp "/usr/share/zoneinfo/$value" /etc/localtime
+                echo "$value" > /etc/timezone
+            else
+                log "WARNING: timezone '$value' not found"
+            fi
+            ;;
+
+        locale)
+            # Validate locale format (e.g. en_GB.UTF-8) — reject shell metacharacters
+            clean_locale=$(echo "$value" | tr -dc 'a-zA-Z0-9_.-')
+            if [ -z "$clean_locale" ]; then
+                log "WARNING: invalid locale '$value', skipping"
+            else
+                SAVE_LOCALE="$clean_locale"
+                log "Setting locale: $clean_locale"
+                mkdir -p /etc/profile.d
+                echo "export LANG=\"$clean_locale\"" > /etc/profile.d/locale.sh
+            fi
+            ;;
+
+        # ── Pi-Clock-specific settings ──────────────────────
+        center_lon)
+            SAVE_CENTER_LON="$value"
+            log "Setting center longitude: $value"
+            ;;
+
+        qth_lat)
+            SAVE_QTH_LAT="$value"
+            log "Setting QTH latitude: $value"
+            ;;
+
+        qth_lon)
+            SAVE_QTH_LON="$value"
+            log "Setting QTH longitude: $value"
+            ;;
+
+        callsign)
+            SAVE_CALLSIGN="$value"
+            log "Setting callsign: $value"
+            ;;
+
+        grid_square)
+            SAVE_GRID_SQUARE="$value"
+            log "Setting grid square: $value"
+            ;;
+
+        display_resolution)
+            SAVE_DISPLAY_RES="$value"
+            log "Setting display resolution: $value"
+            ;;
+    esac
+done < "$SOURCE"
+
+# Build wpa_supplicant configuration (only from pi-clock-config.txt)
+if [ "$WIFI_COUNT" -gt 0 ]; then
+    log "Building wpa_supplicant configuration..."
+    WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
+    umask 077  # Restrict permissions — WiFi credentials
+
+    cat > "$WPA_CONF" <<WPA_HEADER
+ctrl_interface=/var/run/wpa_supplicant
+ctrl_interface_group=0
+update_config=1
+country=${WIFI_COUNTRY:-GB}
+WPA_HEADER
+
+    for i in 10 9 8 7 6 5 4 3 2 1; do
+        eval "ssid=\$WIFI_SSID_${i}"
+        eval "pass=\$WIFI_PASS_${i}"
+
+        if [ -n "$ssid" ] && [ -n "$pass" ]; then
+            log "Adding network: $ssid (priority $i)"
+            wpa_passphrase "$ssid" "$pass" | sed "s/}/\tpriority=$i\n}/" >> "$WPA_CONF"
+        elif [ -n "$ssid" ] && [ -z "$pass" ] && [ "$SAVE_OPEN_NETWORKS" = "true" ]; then
+            # Open network (no password) — only if enable_open_networks=true
+            log "Adding open network: $ssid (priority $i)"
+            cat >> "$WPA_CONF" <<OPEN_NET
+network={
+	ssid="$ssid"
+	key_mgmt=NONE
+	priority=$i
+}
+OPEN_NET
+        fi
+    done
+fi
+
+# Write Pi-Clock renderer config file — only if processing
+# pi-clock-config.txt (first boot) or if the file doesn't exist yet.
+# On normal boots, leave the existing config untouched so that
+# dashboard-saved settings (DX filters, etc) are preserved.
+RENDER_CONF="/data/etc/pi-clock-renderer.conf"
+mkdir -p /data/etc
+if $FROM_CONFIG_TXT || [ ! -f "$RENDER_CONF" ]; then
+    cat > "$RENDER_CONF" <<EOF
+# Pi-Clock renderer configuration
+# Generated by pi-clock-config at $(date '+%Y-%m-%d %H:%M:%S')
+CENTER_LON=${SAVE_CENTER_LON:-0}
+QTH_LAT=${SAVE_QTH_LAT:-0}
+QTH_LON=${SAVE_QTH_LON:-0}
+CALLSIGN=${SAVE_CALLSIGN:-}
+GRID_SQUARE=${SAVE_GRID_SQUARE:-}
+DISPLAY_RESOLUTION=${SAVE_DISPLAY_RES:-1080p}
+EOF
+    log "Wrote renderer configuration to $RENDER_CONF"
+else
+    log "Renderer config exists, preserving dashboard settings"
+fi
+
+# ── Phase 3: Save and clean up (only from pi-clock-config.txt) ─────────
+if $FROM_CONFIG_TXT; then
+    # Extract the password hash that chpasswd just set
+    HASH=$(sed -n 's/^pi-clock:\([^:]*\):.*/\1/p' /etc/shadow)
+
+    mkdir -p /data/etc
+
+    # Write saved config (overwrites any previous)
+    cat > "$SAVED_CONF" <<EOF
+# Pi-Clock OS saved user configuration
+# Generated: $(date '+%Y-%m-%d %H:%M:%S')
+# Do not edit — this file is overwritten when pi-clock-config.txt is processed.
+user_password_hash=$HASH
+enable_ssh_password=${SAVE_SSH_PASSWORD:-false}
+hostname=${SAVE_HOSTNAME}
+timezone=${SAVE_TIMEZONE}
+locale=${SAVE_LOCALE}
+center_lon=${SAVE_CENTER_LON}
+qth_lat=${SAVE_QTH_LAT}
+qth_lon=${SAVE_QTH_LON}
+callsign=${SAVE_CALLSIGN}
+grid_square=${SAVE_GRID_SQUARE}
+display_resolution=${SAVE_DISPLAY_RES}
+enable_open_networks=${SAVE_OPEN_NETWORKS:-false}
+EOF
+
+    chmod 0600 "$SAVED_CONF"
+    chown root:root "$SAVED_CONF"
+    log "Saved user configuration to $SAVED_CONF"
+
+    # Delete config file — it contains passwords
+    rm -f "$CONFIG_FILE"
+    log "Configuration complete — config file securely deleted."
+else
+    log "Configuration applied from saved settings."
+fi
+
+# ── Phase 4: Repair regulatory database if missing ───────────────────
+# Kernel package upgrades (--force-overwrite) clobber regulatory.db
+# from wireless-regdb. Without it, WiFi falls back to the "world"
+# regulatory domain and can only scan passively — very slow to connect.
+if [ ! -f /lib/firmware/regulatory.db ]; then
+    log "regulatory.db missing — reinstalling wireless-regdb"
+    apk fix wireless-regdb 2>/dev/null || true
+fi

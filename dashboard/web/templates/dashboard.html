@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pi-Clock Dashboard</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <script src="/static/js/theme.js"></script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-brand">
+                <img src="/static/logo.png" alt="" class="navbar-logo">Pi-<span>Clock</span>
+            </div>
+            <div class="navbar-right">
+                <button id="theme-toggle" class="theme-toggle">Dark Mode</button>
+                <form method="POST" action="/logout" style="display:inline">
+                    <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="container dashboard-content">
+
+        <!-- Station Settings -->
+        <div class="card">
+            <div class="card-title">Station Settings</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="callsign">Callsign</label>
+                    <input type="text" id="callsign" class="form-control"
+                           value="{{.Config.Callsign}}" placeholder="M1ABC">
+                </div>
+                <div class="form-group">
+                    <label for="grid_square">Grid Square</label>
+                    <input type="text" id="grid_square" class="form-control"
+                           value="{{.Config.GridSquare}}" placeholder="IO92wm">
+                </div>
+                <div class="form-group">
+                    <label for="qth_lat">QTH Latitude</label>
+                    <input type="text" id="qth_lat" class="form-control"
+                           value="{{.Config.QthLat}}" placeholder="51.5074">
+                </div>
+                <div class="form-group">
+                    <label for="qth_lon">QTH Longitude</label>
+                    <input type="text" id="qth_lon" class="form-control"
+                           value="{{.Config.QthLon}}" placeholder="-0.1278">
+                </div>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-outline btn-sm" onclick="useMyLocation()">
+                    Use My Location
+                </button>
+            </div>
+        </div>
+
+        <!-- Display Settings -->
+        <div class="card">
+            <div class="card-title">Display Settings</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="center_lon">Center Longitude</label>
+                    <input type="text" id="center_lon" class="form-control"
+                           value="{{.Config.CenterLon}}" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label for="display_resolution">Resolution <span id="res-note" class="text-muted"></span></label>
+                    <select id="display_resolution" class="form-control">
+                        <option value="native" {{if eq .Config.DisplayResolution "native"}}selected{{end}}>Native (auto-detect)</option>
+                        <option value="720p" {{if eq .Config.DisplayResolution "720p"}}selected{{end}}>720p (1280x720)</option>
+                        <option value="1080p" {{if eq .Config.DisplayResolution "1080p"}}selected{{end}}>1080p (1920x1080)</option>
+                        <option value="1440p" {{if eq .Config.DisplayResolution "1440p"}}selected{{end}}>1440p (2560x1440)</option>
+                        <option value="4k" {{if eq .Config.DisplayResolution "4k"}}selected{{end}}>4K (3840x2160)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary" onclick="saveConfig()">Save Settings</button>
+            </div>
+        </div>
+
+        <!-- Layer Control -->
+        <div class="card">
+            <div class="card-title">Map Layers</div>
+            <div id="layer-controls">
+                <p class="text-muted">Loading layers...</p>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="saveLayers()">Save Layers</button>
+            </div>
+        </div>
+
+        <!-- Applet Control -->
+        <div class="card">
+            <div class="card-title">Applets</div>
+            <div id="applet-controls">
+                <p class="text-muted">Loading applets...</p>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="saveApplets()">Save Panels</button>
+            </div>
+        </div>
+
+        <!-- Propagation Settings (matches layer order: bandconditions before dxspots) -->
+        <div class="card" id="propagation-card" style="display:none">
+            <div class="card-title card-title-row">Propagation Prediction <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="form-group">
+                <label>Bands</label>
+                <div id="prop-band-toggles" class="actions-row mt-8"></div>
+            </div>
+            <div class="form-group mt-12">
+                <label for="antenna_gain">Antenna Gain: <span id="gain-value">0</span> dBi</label>
+                <input type="range" id="antenna_gain" min="-12" max="12" step="1" value="0" style="width:100%; height:4px; accent-color:var(--accent)">
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="savePropSettings()">Save Settings</button>
+            </div>
+        </div>
+
+        <!-- DX Cluster Settings -->
+        <div class="card" id="dx-cluster-card" style="display:none">
+            <div class="card-title card-title-row">DX Cluster <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="dx_distance">Spot Distance</label>
+                    <select id="dx_distance" class="form-control">
+                        <option value="0">All Spots (no filter)</option>
+                        <option value="500">500 miles / 800 km</option>
+                        <option value="1000">1000 miles / 1600 km</option>
+                        <option value="2000">2000 miles / 3200 km</option>
+                        <option value="3000">3000 miles / 4800 km</option>
+                        <option value="5000">5000 miles / 8000 km</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="dx_spot_age">Spot Timeout</label>
+                    <select id="dx_spot_age" class="form-control">
+                        <option value="300">5 minutes</option>
+                        <option value="600">10 minutes</option>
+                        <option value="900">15 minutes</option>
+                        <option value="1800">30 minutes</option>
+                        <option value="3600">60 minutes</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group mt-8">
+                <label>Bands</label>
+                <div id="band-toggles" class="actions-row mt-8"></div>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="saveDxSettings()">Save DX Settings</button>
+            </div>
+        </div>
+
+        <!-- Satellite Selection (hidden when satellite layer is off) -->
+        <div class="card" id="satellite-select-card" style="display:none">
+            <div class="card-title card-title-row">Satellite Selection <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div id="satellite-controls">
+                <p class="text-muted">Loading satellites...</p>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="saveSatellites()">Save Satellites</button>
+            </div>
+        </div>
+
+        <!-- Lightning Settings (hidden when lightning layer is off) -->
+        <div class="card" id="lightning-card" style="display:none">
+            <div class="card-title card-title-row">Lightning Strikes <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <p class="text-muted mb-8">Real-time lightning data from Blitzortung.org community network.</p>
+            <div class="form-group">
+                <label for="lightning_fade_ms">Fade Time</label>
+                <select id="lightning_fade_ms" class="form-control">
+                    <option value="15000">15 seconds (default)</option>
+                    <option value="30000">30 seconds</option>
+                    <option value="60000">60 seconds</option>
+                    <option value="120000">120 seconds</option>
+                </select>
+                <div class="hint">How long each strike remains visible on the map</div>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="saveLightningSettings()">Save</button>
+            </div>
+        </div>
+
+        <!-- Earthquake Settings (hidden when earthquake layer is off) -->
+        <div class="card" id="earthquake-card" style="display:none">
+            <div class="card-title card-title-row">Earthquakes <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <p class="text-muted mb-8">Significant earthquakes (M4.5+) from USGS Earthquake Hazards Program.</p>
+            <div class="form-group">
+                <label for="earthquake_display_s">Display Time</label>
+                <select id="earthquake_display_s" class="form-control">
+                    <option value="1800">30 minutes</option>
+                    <option value="3600">1 hour</option>
+                    <option value="7200">2 hours</option>
+                    <option value="14400">4 hours</option>
+                    <option value="43200">12 hours</option>
+                    <option value="86400">24 hours (default)</option>
+                </select>
+                <div class="hint">How long each earthquake remains visible on the map</div>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="saveEarthquakeSettings()">Save</button>
+            </div>
+        </div>
+
+        <!-- Ticker Sources (hidden when ticker layer is off) -->
+        <div class="card" id="ticker-sources-card" style="display:none">
+            <div class="card-title card-title-row">News Ticker <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="form-group">
+                <label for="ticker_mode">Display Mode</label>
+                <select id="ticker_mode" class="form-control">
+                    <option value="0">Smooth Scroll</option>
+                    <option value="1">Headlines + Full News</option>
+                </select>
+            </div>
+            <div class="card-title mt-12">Sources</div>
+            <div id="ticker-controls">
+                <p class="text-muted">Loading sources...</p>
+            </div>
+            <div class="mt-12">
+                <button class="btn btn-primary btn-sm" onclick="saveTickerSources()">Save Ticker Settings</button>
+            </div>
+        </div>
+
+        <!-- Network, Hostname and Password — only shown on Pi-Clock OS -->
+        <div class="grid-2" id="os-only-network" style="display:none">
+            <div class="card">
+                <div class="card-title">Network</div>
+                <div class="form-group">
+                    <label for="sys_hostname">Hostname</label>
+                    <input type="text" id="sys_hostname" class="form-control" placeholder="pi-clock" maxlength="63">
+                </div>
+                <div class="mt-12">
+                    <button class="btn btn-primary btn-sm" onclick="saveHostname()">Save Hostname</button>
+                </div>
+                <div class="card-title mt-12">WiFi</div>
+                <div class="form-group">
+                    <label for="wifi_ssid">Network Name (SSID)</label>
+                    <input type="text" id="wifi_ssid" class="form-control" placeholder="MyNetwork">
+                </div>
+                <div class="form-group">
+                    <label for="wifi_password">Password</label>
+                    <input type="password" id="wifi_password" class="form-control" placeholder="Leave blank to keep current">
+                </div>
+                <div class="form-group">
+                    <label for="wifi_country">Country Code</label>
+                    <input type="text" id="wifi_country" class="form-control" maxlength="2" placeholder="GB">
+                </div>
+                <div class="mt-12">
+                    <button class="btn btn-primary btn-sm" onclick="saveWifi()">Save WiFi</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Change Password</div>
+                <p class="text-muted">Used for dashboard login and SSH access.</p>
+                <div class="form-group">
+                    <label for="pw_current">Current Password</label>
+                    <input type="password" id="pw_current" class="form-control" autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label for="pw_new">New Password</label>
+                    <input type="password" id="pw_new" class="form-control" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="pw_confirm">Confirm New Password</label>
+                    <input type="password" id="pw_confirm" class="form-control" autocomplete="new-password">
+                </div>
+                <div class="mt-12">
+                    <button class="btn btn-primary btn-sm" onclick="changePassword()">Change Password</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Information -->
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-title">System</div>
+                <table class="info-table">
+                    <tr><td>Hardware</td>
+                        <td id="sys-model">-</td></tr>
+                    <tr><td>Hostname</td>
+                        <td id="sys-hostname">-</td></tr>
+                    <tr><td>Uptime</td>
+                        <td id="sys-uptime">-</td></tr>
+                    <tr><td>Architecture</td>
+                        <td id="sys-arch">-</td></tr>
+                    <tr><td>Display</td>
+                        <td id="sys-display">-</td></tr>
+                    <tr><td>Refresh Rate</td>
+                        <td id="sys-refresh">-</td></tr>
+                    <tr><td>CPU Cores</td>
+                        <td id="sys-cores">-</td></tr>
+                </table>
+            </div>
+
+            <div class="card" id="os-only-updates" style="display:none">
+                <div class="card-title">Update Status</div>
+                <table class="info-table">
+                    <tr><td>Installed</td>
+                        <td id="sys-os-version">-</td></tr>
+                    <tr><td>Available</td>
+                        <td id="sys-update-available">checking...</td></tr>
+                    <tr><td>Active Slot</td>
+                        <td id="slot-active">-</td></tr>
+                    <tr><td>Slot A</td>
+                        <td id="slot-a-ver">-</td></tr>
+                    <tr><td>Slot B</td>
+                        <td id="slot-b-ver">-</td></tr>
+                    <tr><td>Status</td>
+                        <td><span id="slot-status" class="badge badge-success">OK</span></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- System Actions — only on Pi-Clock OS -->
+        <div class="card" id="os-only-actions" style="display:none">
+            <div class="card-title">System Actions</div>
+            <div class="actions-row">
+                <button class="btn btn-primary" onclick="apkUpgrade()">Update Packages</button>
+                <button class="btn btn-primary" onclick="osUpgrade()">Upgrade OS Image</button>
+                <button class="btn btn-outline" onclick="rollbackSystem()">Rollback</button>
+            </div>
+            <div class="actions-row mt-8">
+                <button class="btn btn-danger" onclick="rebootSystem()">Reboot</button>
+                <button class="btn btn-danger" onclick="shutdownSystem()">Shutdown</button>
+            </div>
+        </div>
+
+        <!-- Spinner overlay for reboot/shutdown feedback -->
+        <div id="system-overlay" class="system-overlay" style="display:none">
+            <div class="system-overlay-content">
+                <img src="/static/logo.png" alt="Pi-Clock" class="overlay-logo">
+                <div id="overlay-spinner" class="spinner"></div>
+                <p id="system-overlay-msg">Processing...</p>
+                <div id="upgrade-steps" style="display:none">
+                    <div class="upgrade-step" data-step="manifest"><span class="step-icon"></span>Checking for updates</div>
+                    <div class="upgrade-step" data-step="download"><span class="step-icon"></span>Downloading OS image</div>
+                    <div class="upgrade-step" data-step="verify"><span class="step-icon"></span>Verifying checksum</div>
+                    <div class="upgrade-step" data-step="format"><span class="step-icon"></span>Preparing partition</div>
+                    <div class="upgrade-step" data-step="extract"><span class="step-icon"></span>Installing update</div>
+                    <div class="upgrade-step" data-step="boot"><span class="step-icon"></span>Updating boot files</div>
+                    <div class="upgrade-step" data-step="config"><span class="step-icon"></span>Finalising</div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div style="margin-bottom:6px;">Built with &#10084;&#65039; for the Amateur Radio community</div>
+            <div class="footer-copyright">&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</div>
+            <div class="footer-links">
+                <a href="https://github.com/MW0MWZ/Pi-Clock" target="_blank" rel="noopener">GitHub</a>
+                <span class="footer-sep">&middot;</span>
+                <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest" target="_blank" rel="noopener">Latest Release</a>
+            </div>
+            <div class="footer-version">Pi-Clock {{.Version}}</div>
+        </footer>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# pi-clock-splash - Display boot splash as early as possible
+# Part of Pi-Clock OS
+#
+# Runs before all other OGC services. Writes the splash logo
+# directly to the framebuffer so the user sees it immediately
+# after kernel boot, instead of a blank screen.
+
+description="Pi-Clock boot splash"
+command="/usr/bin/pi-clock-splash"
+command_args="/usr/share/pi-clock/maps/splash.jpg"
+
+depend() {
+	after devfs
+}
+
+start() {
+	# Switch to tty7 for the graphical display, like X11 does.
+	# This keeps tty1-6 available for console login (Ctrl+Alt+F1)
+	# while our framebuffer output runs on a dedicated VT where
+	# no getty or console text can overwrite it.
+	chvt 7 2>/dev/null || true
+
+	# Suppress kernel printk on console so late boot messages
+	# don't flash on screen during the splash
+	echo 0 > /proc/sys/kernel/printk 2>/dev/null || true
+
+	# Display the splash on the framebuffer
+	if [ -x "$command" ] && [ -f "$command_args" ]; then
+		$command $command_args
+	fi
+}
+
+stop() {
+	# Nothing to stop — splash is a one-shot framebuffer write
+	return 0
+}
