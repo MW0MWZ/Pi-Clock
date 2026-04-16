@@ -16,9 +16,13 @@
                 <img src="/static/logo.png" alt="" class="navbar-logo">Pi-<span>Clock</span>
             </div>
             <div class="navbar-right">
-                <button id="theme-toggle" class="theme-toggle">Dark Mode</button>
+                <a href="/api/system/screenshot" class="btn btn-outline btn-sm"
+                   title="Download a screenshot of the HDMI display output">&#128247; Screenshot</a>
+                <button id="theme-toggle" class="btn btn-outline btn-sm"
+                        title="Toggle light/dark theme">&#9790; Dark Mode</button>
                 <form method="POST" action="/logout" style="display:inline">
-                    <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+                    <button type="submit" class="btn btn-outline btn-sm"
+                            title="Sign out">&#128274; Logout</button>
                 </form>
             </div>
         </div>
@@ -316,20 +320,20 @@
                     <tr><td>Status</td>
                         <td><span id="slot-status" class="badge badge-success">OK</span></td></tr>
                 </table>
+                <div class="actions-row mt-8">
+                    <button class="btn btn-primary btn-sm" onclick="apkUpgrade()">Update Packages</button>
+                    <button class="btn btn-primary btn-sm" onclick="osUpgrade()">Upgrade OS Image</button>
+                    <button class="btn btn-danger btn-sm" onclick="rollbackSystem()">Rollback</button>
+                </div>
             </div>
         </div>
 
         <!-- System Actions — only on Pi-Clock OS -->
         <div class="card" id="os-only-actions" style="display:none">
-            <div class="card-title">System Actions</div>
+            <div class="card-title">System</div>
             <div class="actions-row">
-                <button class="btn btn-primary" onclick="apkUpgrade()">Update Packages</button>
-                <button class="btn btn-primary" onclick="osUpgrade()">Upgrade OS Image</button>
-                <button class="btn btn-outline" onclick="rollbackSystem()">Rollback</button>
-            </div>
-            <div class="actions-row mt-8">
-                <button class="btn btn-danger" onclick="rebootSystem()">Reboot</button>
-                <button class="btn btn-danger" onclick="shutdownSystem()">Shutdown</button>
+                <button class="btn btn-danger btn-sm" onclick="rebootSystem()">Reboot</button>
+                <button class="btn btn-danger btn-sm" onclick="shutdownSystem()">Shutdown</button>
             </div>
         </div>
 
@@ -361,12 +365,6 @@
             </div>
             <div class="footer-version">Pi-Clock {{.Version}}</div>
         </footer>
-    </div>
-
-    <!-- Persistent reboot card — fixed position, always visible -->
-    <div id="reboot-banner" class="reboot-card" style="display:none">
-        <div class="reboot-card-text" id="reboot-reasons"></div>
-        <button class="btn btn-sm reboot-card-btn" onclick="rebootSystem()">Reboot Now</button>
     </div>
 
     <script src="/static/js/dashboard.js"></script>

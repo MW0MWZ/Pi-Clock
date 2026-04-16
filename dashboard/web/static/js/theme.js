@@ -41,6 +41,6 @@
     });
 
     function updateButton(btn, theme) {
-        btn.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+        btn.textContent = theme === 'dark' ? '\u2600 Light Mode' : '\u263E Dark Mode';
     }
 })();

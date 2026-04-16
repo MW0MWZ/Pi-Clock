@@ -185,11 +185,24 @@ function latLonToGrid(lat, lon) {
 }
 
 // ── Toast notifications ─────────────────────────────────────
+/* Get or create the toast stack container. All toasts and the
+ * persistent reboot card live here, stacking bottom-up. */
+function getToastStack() {
+    var stack = document.getElementById('toast-stack');
+    if (!stack) {
+        stack = document.createElement('div');
+        stack.id = 'toast-stack';
+        stack.className = 'toast-stack';
+        document.body.appendChild(stack);
+    }
+    return stack;
+}
+
 function toast(message, type) {
     var el = document.createElement('div');
     el.className = 'toast toast-' + (type || 'success');
     el.textContent = message;
-    document.body.appendChild(el);
+    getToastStack().appendChild(el);
     setTimeout(function() { el.remove(); }, 3000);
 }
 
@@ -291,16 +304,31 @@ function loadSystemInfo() {
          * catches that race. Also runs on the 30s refresh interval. */
         updateRamWarning();
 
-        /* Show reboot banner if any changes are pending */
-        var rebootBanner = document.getElementById('reboot-banner');
-        var rebootReasons = document.getElementById('reboot-reasons');
-        if (rebootBanner && rebootReasons) {
-            if (info.reboot_required === 'true' && info.reboot_reasons) {
-                rebootReasons.textContent = 'Reboot required: ' + info.reboot_reasons;
-                rebootBanner.style.display = '';
+        /* Show or hide persistent reboot card in the toast stack */
+        var existing = document.getElementById('reboot-banner');
+        if (info.reboot_required === 'true' && info.reboot_reasons) {
+            if (!existing) {
+                var card = document.createElement('div');
+                card.id = 'reboot-banner';
+                card.className = 'toast reboot-card';
+                var text = document.createElement('div');
+                text.className = 'reboot-card-text';
+                text.textContent = 'Reboot required: ' + info.reboot_reasons;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm reboot-card-btn';
+                btn.textContent = 'Reboot Now';
+                btn.addEventListener('click', function() { rebootSystem(); });
+                card.appendChild(text);
+                card.appendChild(btn);
+                getToastStack().appendChild(card);
             } else {
-                rebootBanner.style.display = 'none';
+                var textEl = existing.querySelector('.reboot-card-text');
+                if (textEl) textEl.textContent =
+                    'Reboot required: ' + info.reboot_reasons;
             }
+        } else if (existing) {
+            existing.remove();
         }
     }).catch(function() {});
 
@@ -342,20 +370,19 @@ function saveConfig() {
         grid_square: val('grid_square'),
         display_resolution: newRes
     }).then(function() {
-        /* Resolution changes take effect after reboot — the init script
-         * reads DISPLAY_RESOLUTION and switches the framebuffer before
-         * starting the renderer. */
+        /* Check if resolution changed — needs reboot to take effect */
+        var msg = 'Configuration saved';
         var note = document.getElementById('res-note');
         if (note && note.textContent) {
             var current = note.textContent;
             var resMap = {'720p':'1280x720','1080p':'1920x1080','1440p':'2560x1440','4k':'3840x2160'};
             var requested = resMap[newRes] || '';
             if (requested && !current.includes(requested)) {
-                toast('Saved — reboot required for resolution change');
-                return;
+                msg = 'Saved — reboot required for resolution change';
             }
         }
-        toast('Configuration saved');
+        toast(msg);
+        loadSystemInfo();
     }).catch(function() {
         toast('Save failed', 'error');
     });
@@ -401,6 +428,7 @@ function apkUpgrade() {
     apiCall('POST', '/api/system/apk-upgrade').then(function(r) {
         hideOverlay();
         toast(r.status || 'Packages updated');
+        loadSystemInfo();  /* Show reboot banner immediately */
     }).catch(function() {
         hideOverlay();
         toast('Package update failed', 'error');

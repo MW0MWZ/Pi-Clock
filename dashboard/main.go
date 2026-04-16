@@ -92,6 +92,7 @@ func main() {
 		// System info
 		r.Get("/system/info", api.GetSystemInfo)
 		r.Get("/system/slot", api.GetSlotInfo)
+		r.Get("/system/screenshot", api.GetScreenshot)
 
 		// System actions
 		r.Post("/system/reboot", api.PostReboot)

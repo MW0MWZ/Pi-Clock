@@ -14,6 +14,9 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log"
 	"net/http"
@@ -521,10 +524,11 @@ func GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 		for _, line := range strings.Split(string(data), "\n") {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 && parts[0] == "DISPLAY_RESOLUTION" {
-				expected := resMap[strings.TrimSpace(parts[1])]
+				configured := strings.TrimSpace(parts[1])
+				expected := resMap[configured]
 				if expected != "" && displayRes != "" && expected != displayRes {
 					rebootReasons = append(rebootReasons,
-						"Resolution change pending ("+parts[1]+")")
+						"Resolution change pending ("+configured+")")
 				}
 				break
 			}
@@ -595,6 +599,89 @@ func GetSlotInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, info)
+}
+
+// GetScreenshot reads the Linux framebuffer (/dev/fb0) and returns
+// it as a PNG image. The framebuffer pixel format on the Pi is BGRA
+// (32-bit), which we convert to RGBA for the PNG encoder.
+//
+// Resolution is read from /sys/class/graphics/fb0/virtual_size and
+// stride from /sys/class/graphics/fb0/stride. This works on all Pi
+// models regardless of resolution.
+func GetScreenshot(w http.ResponseWriter, r *http.Request) {
+	/* Read framebuffer dimensions */
+	sizeData, err := os.ReadFile("/sys/class/graphics/fb0/virtual_size")
+	if err != nil {
+		http.Error(w, "cannot read framebuffer size", http.StatusInternalServerError)
+		return
+	}
+	dims := strings.Split(strings.TrimSpace(string(sizeData)), ",")
+	if len(dims) != 2 {
+		http.Error(w, "unexpected framebuffer size format", http.StatusInternalServerError)
+		return
+	}
+	width, _ := strconv.Atoi(dims[0])
+	height, _ := strconv.Atoi(dims[1])
+	if width <= 0 || height <= 0 {
+		http.Error(w, "invalid framebuffer dimensions", http.StatusInternalServerError)
+		return
+	}
+
+	/* Read stride (bytes per row — may be padded beyond width*4) */
+	stride := width * 4
+	if strideData, err := os.ReadFile("/sys/class/graphics/fb0/stride"); err == nil {
+		if s, err := strconv.Atoi(strings.TrimSpace(string(strideData))); err == nil && s > 0 {
+			stride = s
+		}
+	}
+
+	/* Sanity checks — prevent panics from corrupt sysfs values */
+	if width > 7680 || height > 4320 || stride < width*4 {
+		http.Error(w, "framebuffer dimensions out of range", http.StatusInternalServerError)
+		return
+	}
+
+	/* Read the raw framebuffer */
+	fb, err := os.Open("/dev/fb0")
+	if err != nil {
+		http.Error(w, "cannot open framebuffer", http.StatusInternalServerError)
+		return
+	}
+	defer fb.Close()
+
+	raw := make([]byte, stride*height)
+	if _, err := io.ReadFull(fb, raw); err != nil {
+		http.Error(w, "cannot read framebuffer", http.StatusInternalServerError)
+		return
+	}
+
+	/* Convert BGRA framebuffer to RGBA PNG.
+	 * The Pi's framebuffer is BGRA in memory (little-endian ARGB32),
+	 * so we swap B and R channels for each pixel. */
+	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		rowOff := y * stride
+		for x := 0; x < width; x++ {
+			off := rowOff + x*4
+			b := raw[off+0]
+			g := raw[off+1]
+			r := raw[off+2]
+			/* Alpha channel in framebuffer is often 0 (opaque in
+			 * pre-multiplied) — force to 255 for the PNG. */
+			img.SetNRGBA(x, y, color.NRGBA{R: r, G: g, B: b, A: 255})
+		}
+	}
+
+	/* Generate filename with timestamp */
+	filename := fmt.Sprintf("pi-clock-%s.png",
+		time.Now().UTC().Format("2006-01-02-150405"))
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	if err := png.Encode(w, img); err != nil {
+		log.Printf("GetScreenshot: png encode: %v", err)
+	}
 }
 
 // PostReboot triggers a system reboot. The response is sent before the
