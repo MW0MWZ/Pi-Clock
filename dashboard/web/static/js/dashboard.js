@@ -290,6 +290,18 @@ function loadSystemInfo() {
          * loadLayers saw ramBudgetMb=0 and skipped. This second call
          * catches that race. Also runs on the 30s refresh interval. */
         updateRamWarning();
+
+        /* Show reboot banner if any changes are pending */
+        var rebootBanner = document.getElementById('reboot-banner');
+        var rebootReasons = document.getElementById('reboot-reasons');
+        if (rebootBanner && rebootReasons) {
+            if (info.reboot_required === 'true' && info.reboot_reasons) {
+                rebootReasons.textContent = 'Reboot required: ' + info.reboot_reasons;
+                rebootBanner.style.display = '';
+            } else {
+                rebootBanner.style.display = 'none';
+            }
+        }
     }).catch(function() {});
 
     apiCall('GET', '/api/system/slot').then(function(slot) {

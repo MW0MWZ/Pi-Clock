@@ -287,6 +287,11 @@ static void sgp4_propagate(pic_sat_t *sat, time_t now)
  * is too slow for BusyBox ssl_client on Pi Zero (times out). */
 #define TLE_BULK_URL "https://www.amsat.org/tle/current/nasabare.txt"
 
+/* Individual TLE API — used as fallback for satellites not in the
+ * AMSAT amateur catalog (e.g., Meteor-M weather sats). Returns JSON
+ * with line1/line2 fields. Works reliably from BusyBox wget on Pi. */
+#define TLE_API_URL "https://tle.ivanstanojevic.me/api/tle/%d"
+
 /*
  * find_tle_in_cache - Search the cached TLE data for a NORAD ID.
  * TLE format: 3 lines per satellite (name, line1, line2).
@@ -388,15 +393,92 @@ static int fetch_tle(pic_sat_t *sat)
 }
 
 /*
+ * extract_json_string - Extract a JSON string value by key.
+ *
+ * Searches for "key":"value" and copies value into out (up to
+ * out_size-1 chars). Handles escaped quotes. Returns 0 on success.
+ */
+static int extract_json_string(const char *json, const char *key,
+                               char *out, int out_size)
+{
+    char needle[64];
+    const char *p, *end;
+    int len;
+
+    snprintf(needle, sizeof(needle), "\"%s\":\"", key);
+    p = strstr(json, needle);
+    if (!p) return -1;
+    p += strlen(needle);
+
+    /* Find closing quote (skip escaped quotes) */
+    end = p;
+    while (*end && !(*end == '"' && *(end - 1) != '\\')) end++;
+    if (!*end) return -1;
+
+    len = (int)(end - p);
+    if (len >= out_size) len = out_size - 1;
+    memcpy(out, p, len);
+    out[len] = '\0';
+
+    /* Unescape \/ (JSON forward slash escaping) */
+    {
+        char *s = out;
+        char *w = out;
+        while (*s) {
+            if (*s == '\\' && *(s + 1) == '/') { *w++ = '/'; s += 2; }
+            else *w++ = *s++;
+        }
+        *w = '\0';
+    }
+
+    return 0;
+}
+
+/*
+ * fetch_tle_individual - Fetch a single TLE by NORAD ID.
+ *
+ * Used as a fallback when the AMSAT bulk catalog doesn't contain a
+ * satellite (e.g., Meteor-M weather satellites are not amateur).
+ * Uses tle.ivanstanojevic.me which returns JSON with line1/line2
+ * fields and works reliably with BusyBox wget on the Pi.
+ */
+static int fetch_tle_individual(pic_sat_t *sat)
+{
+    char url[256];
+    char buf[1024];
+    char l1[80], l2[80];
+    int n;
+
+    snprintf(url, sizeof(url), TLE_API_URL, sat->norad_id);
+    n = pic_fetch_to_buf(url, buf, sizeof(buf));
+    if (n <= 0) return -1;
+
+    /* Extract TLE lines from JSON response */
+    if (extract_json_string(buf, "line1", l1, sizeof(l1)) != 0 ||
+        extract_json_string(buf, "line2", l2, sizeof(l2)) != 0) {
+        return -1;
+    }
+
+    if (parse_tle(sat, l1, l2) == 0) {
+        printf("satellite: TLE loaded for %s (NORAD %d, MM=%.4f rev/day)\n",
+               sat->name, sat->norad_id, sat->mean_motion);
+        return 0;
+    }
+
+    return -1;
+}
+
+/*
  * fetch_all_tles - Download bulk TLE catalog and parse for our satellites.
  *
- * Makes ONE request to Celestrak for the entire amateur satellite catalog,
- * caches it to /tmp, then parses TLEs for each registered satellite.
- * One TLS handshake instead of 20+ individual ones.
+ * First fetches the AMSAT amateur satellite catalog (one request for
+ * all amateur sats). Then, for any enabled satellite not found in the
+ * AMSAT catalog, falls back to Celestrak individual TLE lookup. This
+ * handles non-amateur satellites like Meteor-M weather sats.
  */
 static void fetch_all_tles(void)
 {
-    int i, loaded = 0;
+    int i, loaded = 0, fallback = 0;
 
     printf("satellite: fetching amateur TLE catalog...\n");
 
@@ -417,8 +499,26 @@ static void fetch_all_tles(void)
     }
     pthread_mutex_unlock(&sat_list->mutex);
 
+    /* Fallback: fetch individually for satellites not in AMSAT.
+     * This covers non-amateur satellites like Meteor-M weather sats.
+     * Each is a separate HTTPS request, but typically only 1-4 sats
+     * need this, so the overhead is minimal. */
+    pthread_mutex_lock(&sat_list->mutex);
+    for (i = 0; i < sat_list->count; i++) {
+        if (!sat_running) break;
+        if (!sat_list->sats[i].enabled) continue;
+        if (sat_list->sats[i].mean_motion > 0) continue;  /* Already loaded */
+        if (fetch_tle_individual(&sat_list->sats[i]) == 0) {
+            loaded++;
+            fallback++;
+        }
+    }
+    pthread_mutex_unlock(&sat_list->mutex);
+
     sat_list->last_tle_update = time(NULL);
-    printf("satellite: TLE fetch complete (%d loaded)\n", loaded);
+    printf("satellite: TLE fetch complete (%d loaded", loaded);
+    if (fallback > 0) printf(", %d via individual fetch", fallback);
+    printf(")\n");
 }
 
 static void *sat_thread_func(void *arg)

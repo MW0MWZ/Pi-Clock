@@ -505,20 +505,72 @@ func GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	/* Check if a reboot is required. We build a list of reasons
+	 * so the dashboard can show a persistent banner. Reasons:
+	 *   - Resolution change pending (config != actual)
+	 *   - OS upgrade pending (PENDING=true in slot.conf)
+	 *   - Package upgrade pending (marker file exists) */
+	var rebootReasons []string
+
+	/* Resolution mismatch: compare configured vs actual */
+	if data, err := os.ReadFile("/data/etc/pi-clock-renderer.conf"); err == nil {
+		resMap := map[string]string{
+			"720p": "1280,720", "1080p": "1920,1080",
+			"1440p": "2560,1440", "4k": "3840,2160",
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 && parts[0] == "DISPLAY_RESOLUTION" {
+				expected := resMap[strings.TrimSpace(parts[1])]
+				if expected != "" && displayRes != "" && expected != displayRes {
+					rebootReasons = append(rebootReasons,
+						"Resolution change pending ("+parts[1]+")")
+				}
+				break
+			}
+		}
+	}
+
+	/* OS slot upgrade pending */
+	if data, err := os.ReadFile("/boot/firmware/slot.conf"); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.TrimSpace(line) == "PENDING=true" {
+				rebootReasons = append(rebootReasons,
+					"OS upgrade pending")
+				break
+			}
+		}
+	}
+
+	/* APK upgrade pending — marker file created by apk-upgrade handler */
+	if _, err := os.Stat("/tmp/pi-clock-apk-upgraded"); err == nil {
+		rebootReasons = append(rebootReasons,
+			"Package upgrade pending")
+	}
+
+	rebootRequired := "false"
+	rebootReasonStr := ""
+	if len(rebootReasons) > 0 {
+		rebootRequired = "true"
+		rebootReasonStr = strings.Join(rebootReasons, "; ")
+	}
+
 	info := map[string]string{
-		"hostname":       hostname,
-		"uptime":         uptimeStr,
-		"arch":           runtime.GOARCH,
-		"release":        strings.TrimSpace(string(release)),
-		"os_version":     osVersion,
-		"display_size":   displayRes,
-		"refresh_rate":   refreshRate,
-		"cpu_cores":      cpuCores,
-		"pi_clock_os":    isPiClockOS,
-		"pi_model":       piModel,
-		"max_resolution": maxRes,
-		"ram_total":      ramTotal,
-		"ram_budget":     ramBudget,
+		"hostname":        hostname,
+		"uptime":          uptimeStr,
+		"arch":            runtime.GOARCH,
+		"release":         strings.TrimSpace(string(release)),
+		"os_version":      osVersion,
+		"display_size":    displayRes,
+		"refresh_rate":    refreshRate,
+		"cpu_cores":       cpuCores,
+		"pi_clock_os":     isPiClockOS,
+		"pi_model":        piModel,
+		"max_resolution":  maxRes,
+		"ram_total":       ramTotal,
+		"ram_budget":      ramBudget,
+		"reboot_required": rebootRequired,
+		"reboot_reasons":  rebootReasonStr,
 	}
 
 	jsonResponse(w, http.StatusOK, info)
@@ -580,6 +632,11 @@ func PostApkUpgrade(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	/* Create a marker file so the dashboard shows a reboot banner.
+	 * The new binary is installed but not running until reboot.
+	 * Deleted automatically on reboot (tmpfs). */
+	os.WriteFile("/tmp/pi-clock-apk-upgraded", []byte("1"), 0644)
+
 	jsonResponse(w, http.StatusOK, map[string]string{
 		"status": "packages updated",
 		"output": combined,

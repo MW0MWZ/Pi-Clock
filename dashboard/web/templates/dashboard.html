@@ -363,6 +363,12 @@
         </footer>
     </div>
 
+    <!-- Persistent reboot card — fixed position, always visible -->
+    <div id="reboot-banner" class="reboot-card" style="display:none">
+        <div class="reboot-card-text" id="reboot-reasons"></div>
+        <button class="btn btn-sm reboot-card-btn" onclick="rebootSystem()">Reboot Now</button>
+    </div>
+
     <script src="/static/js/dashboard.js"></script>
 </body>
 </html>

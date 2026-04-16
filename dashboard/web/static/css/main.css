@@ -558,6 +558,37 @@ select.form-control {
 .toast-success { background: var(--success); }
 .toast-error { background: var(--danger); }
 
+.reboot-card {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--danger);
+    color: #fff;
+    padding: 14px 18px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    z-index: 9999;
+    max-width: 340px;
+    animation: slideIn 0.3s ease;
+}
+
+.reboot-card-text {
+    font-size: 0.85em;
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+.reboot-card-btn {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.4);
+    width: 100%;
+}
+
+.reboot-card-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
 .ram-warning {
     background: var(--warning, #f0ad4e);
     color: #333;
