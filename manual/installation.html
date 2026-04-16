@@ -104,6 +104,15 @@
                 <p>Click <strong>"Yes"</strong> to confirm, then wait for the write and verification to complete. This typically takes 2&ndash;5 minutes depending on your SD card speed.</p>
             </div>
         </div>
+        <div class="step">
+            <div class="step-num">8</div>
+            <div class="step-content">
+                <h4>Copy your configuration file</h4>
+                <p>Once the write is complete, Raspberry Pi Imager will automatically eject the card. <strong>Remove the SD card and re-insert it</strong> into your computer. A drive called <strong>"BOOT"</strong> will appear.</p>
+                <p>If you created a <code>pi-clock-config.txt</code> file using the <a href="../config-generator.html">Configurator</a> (or by hand &mdash; see <a href="#zero-touch">Zero-Touch Configuration</a> below), copy it to the root of the <strong>BOOT</strong> drive now. This configures your WiFi, callsign, location, and other settings so Pi-Clock is ready to go on first boot.</p>
+                <p>Eject the card safely, insert it into your Pi, and power on.</p>
+            </div>
+        </div>
     </div>
 
     <div class="callout callout-warning">
