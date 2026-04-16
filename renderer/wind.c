@@ -259,6 +259,10 @@ static void *wind_thread_func(void *arg)
             printf("wind: decompressing...\n");
             if (decompress_gz(WIND_CACHE_PATH, WIND_RAW_PATH) == 0) {
                 parse_gfs_binary(WIND_RAW_PATH, cfg_data);
+                /* Clean up tmpfs — data is now in memory. These files
+                 * are ~1.6MB combined on tmpfs (which is RAM). */
+                unlink(WIND_CACHE_PATH);
+                unlink(WIND_RAW_PATH);
             } else {
                 printf("wind: decompression failed\n");
             }

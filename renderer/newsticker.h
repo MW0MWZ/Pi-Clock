@@ -95,6 +95,16 @@ typedef struct {
     int    cache_count;       /* count when cache was computed */
     time_t cache_updated;     /* last_updated when cache was computed */
 
+    /*
+     * Time-based scroll state for scroll mode.
+     *
+     * scroll_offset is set each frame by the ticker render thread
+     * as (int)(CLOCK_MONOTONIC_seconds * scroll_speed). Because
+     * it tracks real time, a late frame still shows the correct
+     * position for that instant — delivery jitter is invisible.
+     */
+    int scroll_offset;               /* Current scroll position   */
+
     time_t last_updated;
     pthread_mutex_t mutex;
 } pic_ticker_t;

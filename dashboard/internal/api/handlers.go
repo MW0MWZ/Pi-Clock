@@ -456,6 +456,8 @@ func GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 	displayRes := strings.TrimSpace(string(fbSize))
 	refreshRate := ""
 	cpuCores := ""
+	ramTotal := ""
+	ramBudget := ""
 	if data, err := os.ReadFile("/tmp/pi-clock-cache/display-status"); err == nil {
 		for _, line := range strings.Split(string(data), "\n") {
 			parts := strings.SplitN(line, "=", 2)
@@ -467,6 +469,10 @@ func GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 				refreshRate = parts[1] + " Hz"
 			case "CPU_CORES":
 				cpuCores = parts[1]
+			case "RAM_TOTAL":
+				ramTotal = parts[1]
+			case "RAM_BUDGET":
+				ramBudget = parts[1]
 			}
 		}
 	}
@@ -510,6 +516,8 @@ func GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 		"pi_clock_os":    isPiClockOS,
 		"pi_model":       piModel,
 		"max_resolution": maxRes,
+		"ram_total":      ramTotal,
+		"ram_budget":     ramBudget,
 	}
 
 	jsonResponse(w, http.StatusOK, info)

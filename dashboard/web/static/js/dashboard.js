@@ -11,6 +11,58 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
+// ── RAM budget ─────────────────────────────────────────────
+// These are populated from /api/system/info when the page loads.
+// ramBudgetMb is the MB available for layer surfaces (total - overhead).
+// surfaceMb is calculated from display resolution (w * h * 4 / 1M).
+var ramBudgetMb = 0;
+var surfaceMb = 0;
+
+/* Per-layer extra memory cost in MB beyond the surface.
+ * Must match the layer_budget[] table in display.c. */
+var layerExtraMb = {
+    'wind':           4,
+    'aurora':         4,
+    'satellites':     2,
+    'lightning':      2,
+    'dxspots':        1,
+    'bandconditions': 1,
+    'ticker':         1,
+    'earthquakes':    1
+};
+
+/* Calculate total memory cost of all enabled layers */
+function calcLayerCostMb() {
+    var total = 0;
+    document.querySelectorAll('[data-layer]').forEach(function(toggle) {
+        if (toggle.checked) {
+            var name = toggle.getAttribute('data-layer');
+            total += surfaceMb + (layerExtraMb[name] || 0);
+        }
+    });
+    /* Also count always-on layers (basemap, daylight) that have
+     * no toggle checkbox — they have opacity sliders only */
+    total += surfaceMb * 2;
+    return total;
+}
+
+/* Update the RAM budget warning banner visibility */
+function updateRamWarning() {
+    var banner = document.getElementById('ram-warning');
+    if (!banner || ramBudgetMb <= 0) return;
+
+    var used = calcLayerCostMb();
+    if (used > ramBudgetMb) {
+        banner.textContent = 'RAM warning: enabled layers need ~' +
+            used + 'MB but only ' + ramBudgetMb +
+            'MB is available. The renderer will force-disable ' +
+            'low-priority layers to prevent a crash.';
+        banner.style.display = '';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
 // ── API helper ──────────────────────────────────────────────
 function apiCall(method, url, data) {
     var opts = {
@@ -185,6 +237,15 @@ function loadSystemInfo() {
         setText('sys-cores', info.cpu_cores ? info.cpu_cores + ' core(s)' : '-');
         setText('sys-os-version', info.os_version || '-');
 
+        /* Store RAM budget for layer toggle warnings */
+        if (info.ram_budget) ramBudgetMb = parseInt(info.ram_budget) || 0;
+        if (info.display_size) {
+            var dims = info.display_size.split(',');
+            if (dims.length === 2) {
+                surfaceMb = Math.ceil(parseInt(dims[0]) * parseInt(dims[1]) * 4 / (1024 * 1024));
+            }
+        }
+
         /* Show Pi-Clock OS-only sections */
         if (info.pi_clock_os === 'true') {
             setCardVisibility('os-only-network', true);
@@ -223,6 +284,12 @@ function loadSystemInfo() {
         if (info.pi_model) {
             setText('sys-model', info.pi_model);
         }
+
+        /* Re-check RAM budget — layers may have loaded before system
+         * info arrived (both are async), so the initial check in
+         * loadLayers saw ramBudgetMb=0 and skipped. This second call
+         * catches that race. Also runs on the 30s refresh interval. */
+        updateRamWarning();
     }).catch(function() {});
 
     apiCall('GET', '/api/system/slot').then(function(slot) {
@@ -508,7 +575,9 @@ function loadLayers() {
                 row.appendChild(spacer);
             } else {
                 /* Toggle switch */
-                row.appendChild(buildToggle('data-layer', layer.name, layer.enabled));
+                var toggle = buildToggle('data-layer', layer.name, layer.enabled);
+                toggle.querySelector('input').addEventListener('change', updateRamWarning);
+                row.appendChild(toggle);
             }
 
             /* Layer name */
@@ -621,6 +690,9 @@ function loadLayers() {
                 });
             }
         });
+
+        /* Check RAM budget now that all toggles are built */
+        updateRamWarning();
 
         return layerState;
     }).catch(function() { return {}; });

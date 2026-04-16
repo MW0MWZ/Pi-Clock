@@ -20,12 +20,13 @@ VERSION ?= 0.0.0-dev
 # Cairo provides 2D rendering for each layer.
 CAIRO_CFLAGS := $(shell pkg-config --cflags cairo)
 CAIRO_LIBS   := $(shell pkg-config --libs cairo)
+DRM_CFLAGS   := $(shell pkg-config --cflags libdrm 2>/dev/null)
 SDL2_CFLAGS  := $(shell pkg-config --cflags sdl2 2>/dev/null)
 SDL2_LIBS    := $(shell pkg-config --libs sdl2 2>/dev/null)
 
 # Combine flags
-ALL_CFLAGS  = $(CFLAGS) $(CAIRO_CFLAGS) $(SDL2_CFLAGS) -DVERSION=\"$(VERSION)\"
-ALL_LDFLAGS = $(LDFLAGS) $(CAIRO_LIBS) $(SDL2_LIBS) -lm -lpthread -lssl -lcrypto
+ALL_CFLAGS  = $(CFLAGS) $(CAIRO_CFLAGS) $(SDL2_CFLAGS) $(DRM_CFLAGS) -DVERSION=\"$(VERSION)\"
+ALL_LDFLAGS = $(LDFLAGS) $(CAIRO_LIBS) $(SDL2_LIBS) -lm -lpthread -lssl -lcrypto -ldrm
 
 # Source files and corresponding object files
 SOURCES = main.c display.c layer.c solar.c lunar.c image.c config.c borders.c \

@@ -322,16 +322,19 @@ void pic_layer_render_ticker(cairo_t *cr, int width, int height,
 
     if (!ticker) return;
 
-    /* Export bar geometry for applet/legend alignment */
-    ticker->bar_top = bar_y;
-    ticker->bar_bottom = bar_y + bar_h;
-
     /* Use applet margins or 5% default */
     margin_l = ticker->left_margin > 0 ? ticker->left_margin : width * 0.05;
     margin_r = ticker->right_margin > 0 ? ticker->right_margin : width * 0.05;
     bar_w = width - margin_l - margin_r;
 
     pthread_mutex_lock(&ticker->mutex);
+
+    /* Export bar geometry under the mutex so the main thread's blit
+     * loop (which reads these under the same mutex) never sees a
+     * torn 64-bit double on multi-core ARM (Pi 3/4/5). */
+    ticker->bar_top = bar_y;
+    ticker->bar_bottom = bar_y + bar_h;
+
     if (ticker->count == 0) {
         pthread_mutex_unlock(&ticker->mutex);
         return;
@@ -571,12 +574,20 @@ void pic_layer_render_ticker(cairo_t *cr, int width, int height,
         }
     } else {
         /*
-         * Scroll mode: continuous smooth scroll of all items.
+         * Scroll mode — time-based position.
+         *
+         * The scroll offset is set each frame by the ticker thread
+         * as a pure function of CLOCK_MONOTONIC time. A frame that
+         * delivers late still shows the correct position for that
+         * instant — the eye sees smooth motion because position
+         * tracks real time, not frame count.
+         *
+         * Text is rendered directly each frame (Cairo font cache
+         * makes repeat glyph draws fast). The position is rounded
+         * to integer pixels so glyphs never sub-pixel shift.
          */
         cairo_text_extents_t ext;
         double total_w;
-        struct timeval tv;
-        double time_s;
 
         /* Cache total text width */
         if (ticker->cache_count != ticker->count ||
@@ -598,9 +609,6 @@ void pic_layer_render_ticker(cairo_t *cr, int width, int height,
         }
         total_w = ticker->cached_total_w;
 
-        gettimeofday(&tv, NULL);
-        time_s = (double)tv.tv_sec + (double)tv.tv_usec / 1000000.0;
-
         /* If content fits, centre it — otherwise scroll */
         if (total_w <= bar_w - 20) {
             double cx = margin_l + (bar_w - total_w) / 2.0;
@@ -621,11 +629,14 @@ void pic_layer_render_ticker(cairo_t *cr, int width, int height,
                                        cx, text_y, font_size, 0);
             }
         } else {
-            /* Scrolling */
-            double speed = width * 0.04;
-            double scroll_total = total_w + bar_w;
-            double pos = fmod(time_s * speed, scroll_total);
-            double cx = margin_l + bar_w - pos;
+            /* Scrolling — integer pixel position from monotonic time.
+             * scroll_offset is set by the ticker thread each frame as
+             * (int)(monotonic_seconds * scroll_speed). We modulo-wrap
+             * it by scroll_total for seamless looping. */
+            int scroll_total = (int)(total_w + bar_w);
+            int pos = (scroll_total > 0)
+                    ? ticker->scroll_offset % scroll_total : 0;
+            int cx = (int)(margin_l + bar_w) - pos;
 
             for (i = 0; i < ticker->count; i++) {
                 if (i > 0) {
@@ -637,10 +648,10 @@ void pic_layer_render_ticker(cairo_t *cr, int width, int height,
                     cairo_move_to(cr, cx, text_y);
                     cairo_show_text(cr, SEP);
                     cairo_text_extents(cr, SEP, &ext);
-                    cx += ext.x_advance;
+                    cx += (int)ext.x_advance;
                 }
-                cx += draw_ticker_item(cr, &ticker->items[i],
-                                       cx, text_y, font_size, 0);
+                cx += (int)draw_ticker_item(cr, &ticker->items[i],
+                                            cx, text_y, font_size, 0);
             }
         }
     }

@@ -558,6 +558,16 @@ select.form-control {
 .toast-success { background: var(--success); }
 .toast-error { background: var(--danger); }
 
+.ram-warning {
+    background: var(--warning, #f0ad4e);
+    color: #333;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 0.85em;
+    line-height: 1.4;
+}
+
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }

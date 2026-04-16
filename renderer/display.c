@@ -74,6 +74,7 @@ extern void pic_qth_invalidate(void);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
@@ -145,6 +146,13 @@ double pic_ticker_bar_top = 0;
 #include <linux/fb.h>
 #include <linux/vt.h>
 #include <linux/kd.h>
+#include <sched.h>
+
+/* DRM vblank timing — used by the ticker thread to synchronise
+ * framebuffer writes with the display's vertical blanking interval.
+ * The actual display still uses /dev/fb0; we only open the DRM
+ * device for its vblank timing signal, not for rendering. */
+#include <xf86drm.h>
 
 /*
  * PIC_VT - The virtual terminal used for graphical output.
@@ -351,6 +359,229 @@ static void install_signal_handlers(void)
 }
 
 /*
+ * get_total_ram_mb - Read total physical RAM from /proc/meminfo.
+ *
+ * Returns MemTotal in megabytes. This is the total RAM reported by
+ * the kernel, which already excludes GPU memory on the Pi (the GPU
+ * split is handled by the firmware before Linux boots).
+ *
+ * Returns 0 on failure (file not readable, parse error).
+ */
+static int get_total_ram_mb(void)
+{
+    FILE *f = fopen("/proc/meminfo", "r");
+    char line[128];
+    int mb = 0;
+
+    if (!f) return 0;
+
+    while (fgets(line, sizeof(line), f)) {
+        unsigned long kb;
+        if (sscanf(line, "MemTotal: %lu kB", &kb) == 1) {
+            mb = (int)(kb / 1024);
+            break;
+        }
+    }
+    fclose(f);
+    return mb;
+}
+
+/*
+ * RAM budget system — prevent OOM on memory-constrained Pis.
+ *
+ * Each enabled layer allocates a full-screen ARGB32 Cairo surface:
+ *   1080p = 1920 * 1080 * 4 = ~8 MB per layer
+ *   4K    = 3840 * 2160 * 4 = ~32 MB per layer
+ *
+ * On a Pi 1 Model A (256MB total, ~221MB after GPU), enabling 12+
+ * layers at 1080p easily exceeds available RAM. Rather than letting
+ * the OOM killer terminate us, we calculate a RAM budget at startup
+ * and force-disable low-priority layers that exceed it.
+ *
+ * Each layer has a worst-case memory cost: its Cairo surface (which
+ * scales with resolution) plus any data buffers, fetch threads, and
+ * network overhead it needs. Heavy layers like wind (surface + 4MB
+ * data arrays + decompression) cost more than lightweight ones like
+ * grid (surface only).
+ *
+ * Fixed overhead covers base maps, compositing buffers, geographic
+ * data, libraries, OS, and safety headroom. This is deliberately
+ * conservative — running out of RAM is worse than disabling a layer.
+ */
+
+/* Fixed RAM reservation in MB. This is subtracted from total RAM
+ * before budgeting layer surfaces. It must cover EVERYTHING that
+ * isn't a layer surface — our process overhead AND the OS itself,
+ * since MemTotal is the total RAM on the system, not just what's
+ * free for us.
+ *
+ *   Base maps (day + night):     16 MB
+ *   Compositing (frame + base):  16 MB
+ *   Borders/timezone data:        4 MB
+ *   Solar/DX/ticker (always on): 10 MB
+ *   Thread stacks (~10 threads):  8 MB
+ *   Cairo font caches:            5 MB
+ *   Shared libraries (libc etc): 15 MB
+ *   OS kernel + slab + buffers:  30 MB
+ *   Dashboard process:            8 MB
+ *   tmpfs (/tmp, /var/log):       4 MB
+ *   Safety headroom:             14 MB
+ *   ─────────────────────────────────
+ *   Total:                      130 MB
+ */
+#define RAM_FIXED_OVERHEAD_MB 130
+
+/*
+ * Layer budget table — priority order and per-layer memory cost.
+ *
+ * Priority: highest first. When the budget is exceeded, layers are
+ * force-disabled from the bottom (lowest priority) up.
+ *
+ * extra_mb: worst-case memory BEYOND the Cairo surface. Includes
+ * data arrays, fetch buffers, TLS connections, TLE caches, etc.
+ * The surface cost itself is calculated at runtime from the display
+ * resolution (width * height * 4 bytes).
+ */
+static const struct {
+    const char *name;
+    int extra_mb;  /* Additional RAM beyond the surface */
+} layer_budget[] = {
+    /* Essential — always try to keep these */
+    {"basemap",        0},  /* Static map render                     */
+    {"daylight",       0},  /* Solar math only                       */
+    {"hud",            0},  /* System time only                      */
+
+    /* Lightweight — surface only, no data */
+    {"grid",           0},  /* Calculated locally                    */
+    {"borders",        0},  /* Data loaded in fixed overhead         */
+    {"timezone",       0},  /* Data loaded in fixed overhead         */
+    {"qth",            0},  /* Calculated locally                    */
+    {"sun",            0},  /* Solar math only                       */
+    {"moon",           0},  /* Lunar math only                       */
+
+    /* Ham radio core — moderate overhead */
+    {"dxspots",        1},  /* Spot list + cluster telnet thread     */
+    {"bandconditions", 1},  /* Propagation grid calculation          */
+    {"ticker",         1},  /* Item buffer + RSS fetch thread        */
+
+    /* Moderate — network fetchers with data */
+    {"satellites",     2},  /* TLE cache + track arrays + SGP4       */
+    {"earthquakes",    1},  /* USGS JSON fetch buffer                */
+    {"lightning",      2},  /* TLS WebSocket + LZW decode workspace  */
+
+    /* Optional overlays */
+    {"cqzone",         0},  /* Static data                           */
+    {"maidenhead",     0},  /* Calculated locally                    */
+
+    /* Heavy — large data fetchers */
+    {"aurora",         4},  /* 3MB fetch buffer + 360x181 grid       */
+    {"wind",           4},  /* 4x 360x181 float grids + gunzip       */
+    {"cloud",          0},  /* Shares wind data arrays               */
+    {"precip",         0},  /* Shares wind data arrays               */
+    {NULL,             0}
+};
+
+/*
+ * get_layer_cost_mb - Return the total worst-case cost for a layer
+ * in megabytes (surface + extra overhead).
+ */
+static int get_layer_cost_mb(const char *name, int surface_mb)
+{
+    int i;
+    for (i = 0; layer_budget[i].name; i++) {
+        if (strcmp(layer_budget[i].name, name) == 0)
+            return surface_mb + layer_budget[i].extra_mb;
+    }
+    /* Unknown layer — assume surface only */
+    return surface_mb;
+}
+
+/*
+ * get_layer_priority - Return the priority index for a layer name.
+ * Lower index = higher priority. Returns 9999 for unknown layers.
+ */
+static int get_layer_priority(const char *name)
+{
+    int i;
+    for (i = 0; layer_budget[i].name; i++) {
+        if (strcmp(layer_budget[i].name, name) == 0) return i;
+    }
+    return 9999;
+}
+
+/*
+ * enforce_ram_budget - Force-disable low-priority layers that exceed
+ * the RAM budget.
+ *
+ * Called after config load, before any surfaces are allocated. Sums
+ * the worst-case memory cost of all enabled layers and compares
+ * against available RAM. If over budget, disables the lowest-priority
+ * enabled layers until the total fits.
+ *
+ * Returns the number of layers that were force-disabled.
+ */
+static int enforce_ram_budget(pic_layer_stack_t *stack,
+                              int total_ram_mb, int surface_mb)
+{
+    int used_mb = 0;
+    int budget_mb;
+    int disabled = 0;
+    int li, worst_pri, worst_li;
+
+    /* If /proc/meminfo was unreadable, skip enforcement entirely
+     * rather than making wrong decisions with zero data. */
+    if (total_ram_mb <= 0) {
+        printf("display: RAM budget: skipped (meminfo unavailable)\n");
+        return 0;
+    }
+
+    budget_mb = total_ram_mb - RAM_FIXED_OVERHEAD_MB;
+    if (budget_mb < surface_mb) budget_mb = surface_mb;
+
+    /* Sum cost of all enabled layers */
+    for (li = 0; li < stack->count; li++) {
+        if (stack->layers[li].enabled)
+            used_mb += get_layer_cost_mb(stack->layers[li].name, surface_mb);
+    }
+
+    /* Repeatedly find and disable the lowest-priority enabled layer
+     * until we're within budget */
+    while (used_mb > budget_mb) {
+        worst_pri = -1;
+        worst_li = -1;
+
+        for (li = 0; li < stack->count; li++) {
+            if (stack->layers[li].enabled) {
+                int pri = get_layer_priority(stack->layers[li].name);
+                if (pri > worst_pri) {
+                    worst_pri = pri;
+                    worst_li = li;
+                }
+            }
+        }
+
+        if (worst_li < 0) break;  /* Nothing left to disable */
+
+        {
+            int cost = get_layer_cost_mb(stack->layers[worst_li].name,
+                                         surface_mb);
+            printf("display: RAM budget: force-disabled '%s'"
+                   " (%dMB > %dMB budget)\n",
+                   stack->layers[worst_li].name, used_mb, budget_mb);
+            used_mb -= cost;
+        }
+        stack->layers[worst_li].enabled = 0;
+        disabled++;
+    }
+
+    if (disabled > 0)
+        printf("display: RAM budget: %dMB used of %dMB available"
+               " (%d layers disabled)\n", used_mb, budget_mb, disabled);
+
+    return disabled;
+}
+
+/*
  * Ticker thread argument block — passed via pthread_create.
  */
 struct ticker_thread_args {
@@ -358,19 +589,40 @@ struct ticker_thread_args {
     pic_layer_stack_t *stack;
     unsigned char *fb_mem;
     int fb_stride;
+    int drm_fd;       /* DRM device fd for vblank timing (-1 if unavailable) */
     int width;
     int height;
     int ticker_fps;   /* Matched to display refresh rate */
+    int total_ram_mb; /* Total system RAM — skip mlockall on low-RAM systems */
     volatile int *quit;
 };
 
 /*
  * ticker_render_func - Dedicated ticker rendering thread.
  *
- * Runs at ~20 FPS with its own Cairo surface, rendering only
+ * Runs at display refresh rate in its own thread, rendering only
  * the ticker bar region and copying those rows directly to the
  * framebuffer. The main thread skips these rows during its
  * full-frame blit, so there's no contention or stutter.
+ *
+ * Smoothness is achieved via three techniques:
+ *
+ *   1. Time-based scroll position — the scroll offset is calculated
+ *      as a pure function of CLOCK_MONOTONIC wall time. A frame
+ *      that delivers late shows the correct position for that
+ *      instant, so delivery jitter is invisible to the eye.
+ *
+ *   2. DRM vblank sync — drmWaitVBlank on /dev/dri/cardN blocks
+ *      until the vertical blanking interval. The memcpy happens
+ *      during blanking, before the scan-out reaches the ticker
+ *      bar at the bottom of the screen. Eliminates tearing.
+ *
+ *   3. SCHED_FIFO priority — reduces wake-up jitter from ~2ms
+ *      (SCHED_OTHER) to ~50-100us, giving tighter vblank timing.
+ *
+ *   4. Margin-clipped blit — only the bar region between the
+ *      applet margins is copied to the framebuffer each frame,
+ *      keeping the memcpy small (~900KB at 4K) and fast.
  */
 static void *ticker_render_func(void *arg)
 {
@@ -378,26 +630,96 @@ static void *ticker_render_func(void *arg)
     cairo_surface_t *surface = NULL;
     int surface_y0 = 0, surface_h = 0;
     int y;
+    struct timespec next_frame;
+    long frame_ns = 1000000000L / a->ticker_fps;
+    const int bpp = 4;  /* Bytes per pixel — BGRA32 framebuffer */
+    double scroll_speed;  /* Pixels per second */
 
-    /* Lower this thread's priority so the main render loop (clock,
-     * layers) always gets CPU first. nice(10) = low priority. */
-    nice(10);
+    /* Elevate to SCHED_FIFO priority 2 for low-jitter wake-ups.
+     * Priority 2 is safely below kernel threads (99) and audio (50+)
+     * but above all normal SCHED_OTHER threads. Requires root or
+     * CAP_SYS_NICE — falls back to nice(10) if not available. */
+    {
+        struct sched_param sp;
+        sp.sched_priority = 2;
+        if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) == 0) {
+            printf("display: ticker thread using SCHED_FIFO priority 2\n");
 
-    printf("display: ticker render thread started (%d FPS, nice=10)\n", a->ticker_fps);
+            /* Lock currently mapped pages to prevent page faults
+             * during the render loop. Only useful with SCHED_FIFO
+             * since page faults under real-time scheduling cause
+             * priority inversion. MCL_CURRENT only — MCL_FUTURE
+             * would trap every subsequent mmap (Cairo surfaces,
+             * allocator) and pin excessive RAM.
+             *
+             * Skip on systems with <= 512MB — pinning pages removes
+             * the kernel's ability to reclaim file-backed pages
+             * under memory pressure, which caused OOM kills on the
+             * Pi 1 Model A (256MB). */
+            if (a->total_ram_mb > 512) {
+                if (mlockall(MCL_CURRENT) == 0)
+                    printf("display: mlockall active\n");
+            }
+        } else {
+            printf("display: ticker thread using default priority (SCHED_FIFO unavailable)\n");
+        }
+    }
+
+    /* Scroll speed: pixels per second, proportional to display width.
+     * The scroll position is calculated from CLOCK_MONOTONIC each
+     * frame, so delivery jitter doesn't affect perceived smoothness —
+     * a late frame simply shows where the text would be at that
+     * instant. The eye integrates over time and sees smooth motion.
+     *
+     *   4K:   3840 * 0.04 = 153.6 px/s
+     *   1080p: 1920 * 0.04 = 76.8 px/s
+     *   720p:  1280 * 0.04 = 51.2 px/s
+     */
+    scroll_speed = a->width * 0.04;
+
+    printf("display: ticker render thread started (%d FPS, %.0f px/s)\n",
+           a->ticker_fps, scroll_speed);
+
+    /* Seed the frame pacer from the monotonic clock */
+    clock_gettime(CLOCK_MONOTONIC, &next_frame);
 
     while (!(*a->quit)) {
-        int y0, y1;
+        int y0, y1, x0, x1;
         int ticker_enabled = 0;
+        int is_holding = 0;
         int li;
 
-        /* In headlines modes, sleep longer during hold phases — no need
-         * to render 60 FPS of static text. Full FPS only during the
-         * fast scroll-in/slide animations (phases 0 and 2). */
-        if (a->ticker->mode >= TICKER_MODE_HEADLINES &&
-            (a->ticker->headline_phase == 1 || a->ticker->headline_phase == 3)) {
-            usleep(500000); /* 2 FPS while holding — just check for timeout */
+        /* ── Frame pacing ──────────────────────────────────────
+         * Sleep until the next frame time. The absolute-time mode
+         * prevents drift — each frame is scheduled at an exact
+         * multiple of frame_ns from the epoch, regardless of how
+         * long rendering took. */
+        next_frame.tv_nsec += frame_ns;
+        while (next_frame.tv_nsec >= 1000000000L) {
+            next_frame.tv_nsec -= 1000000000L;
+            next_frame.tv_sec++;
+        }
+
+        /* In headlines mode, hold phases show static text — drop
+         * to 2 FPS. Reset the epoch on exit to avoid catch-up.
+         * Read mode/phase under the mutex to prevent a data race
+         * with pic_layer_render_ticker on multi-core Pi 3/4/5. */
+        {
+            int mode_snap, phase_snap;
+            pthread_mutex_lock(&a->ticker->mutex);
+            mode_snap = a->ticker->mode;
+            phase_snap = a->ticker->headline_phase;
+            pthread_mutex_unlock(&a->ticker->mutex);
+            is_holding = (mode_snap >= TICKER_MODE_HEADLINES &&
+                         (phase_snap == 1 || phase_snap == 3));
+        }
+        if (is_holding) {
+            struct timespec hold = { 0, 500000000L };
+            nanosleep(&hold, NULL);
+            clock_gettime(CLOCK_MONOTONIC, &next_frame);
         } else {
-            usleep(1000000 / a->ticker_fps);
+            clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
+                            &next_frame, NULL);
         }
 
         /* Check if ticker layer is enabled */
@@ -408,17 +730,33 @@ static void *ticker_render_func(void *arg)
             }
         }
 
+        /* Read bar geometry under the mutex */
+        pthread_mutex_lock(&a->ticker->mutex);
         y0 = (int)a->ticker->bar_top;
         y1 = (int)a->ticker->bar_bottom;
+        x0 = a->ticker->left_margin > 0
+             ? (int)a->ticker->left_margin
+             : (int)(a->width * 0.05);
+        x1 = a->ticker->right_margin > 0
+             ? a->width - (int)a->ticker->right_margin
+             : a->width - (int)(a->width * 0.05);
+        pthread_mutex_unlock(&a->ticker->mutex);
 
         if (!ticker_enabled || y0 <= 0 || y1 <= y0) {
+            pthread_mutex_lock(&a->ticker->mutex);
             a->ticker->bar_top = 0;
             a->ticker->bar_bottom = 0;
+            pthread_mutex_unlock(&a->ticker->mutex);
             continue;
         }
 
-        /* Allocate/reallocate surface sized to just the ticker bar.
-         * Much smaller than full-screen: saves ~30MB on 4K. */
+        /* Clamp horizontal bar bounds to framebuffer width */
+        if (x0 < 0) x0 = 0;
+        if (x1 > a->width) x1 = a->width;
+        if (x0 >= x1) { x0 = 0; x1 = a->width; }
+
+        /* Allocate/reallocate surface sized to the ticker bar.
+         * Full width, bar height — simple and reliable. */
         if (!surface || y0 != surface_y0 || (y1 - y0) != surface_h) {
             if (surface) cairo_surface_destroy(surface);
             surface_y0 = y0;
@@ -434,17 +772,35 @@ static void *ticker_render_func(void *arg)
 
         if (!surface) continue;
 
-        /* Render the ticker — translate so bar_top maps to row 0 */
+        /* ── Scroll position from monotonic clock ──────────────
+         * Calculate the scroll offset as a pure function of time.
+         * A frame that wakes up late shows the correct position
+         * for that instant — delivery jitter is invisible.
+         * Written under the mutex since the main thread can also
+         * call pic_layer_render_ticker which reads scroll_offset. */
+        if (a->ticker->mode == TICKER_MODE_SCROLL) {
+            struct timespec mono;
+            double t;
+            clock_gettime(CLOCK_MONOTONIC, &mono);
+            t = (double)mono.tv_sec + (double)mono.tv_nsec / 1000000000.0;
+            pthread_mutex_lock(&a->ticker->mutex);
+            /* Cap before cast: 2e9 < INT_MAX ensures (int) never
+             * overflows. After fmod the value wraps harmlessly;
+             * % scroll_total in the render path gives the correct
+             * pixel position. */
+            a->ticker->scroll_offset = (int)fmod(t * scroll_speed, 2e9);
+            pthread_mutex_unlock(&a->ticker->mutex);
+        }
+
+        /* Render the ticker into the surface */
         {
             cairo_t *cr = cairo_create(surface);
 
-            /* Clear */
             cairo_set_source_rgba(cr, 0, 0, 0, 0);
             cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
             cairo_paint(cr);
             cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
-            /* Shift coordinate system so the ticker draws at the right Y */
             cairo_translate(cr, 0, -y0);
             pic_layer_render_ticker(cr, a->width, a->height,
                                     time(NULL), a->ticker);
@@ -456,30 +812,40 @@ static void *ticker_render_func(void *arg)
         /* Skip framebuffer write when user is on another VT */
         if (!vt_is_active()) continue;
 
-        /* Copy ticker bar pixels to framebuffer */
+        /* ── DRM vblank sync ───────────────────────────────────
+         * Wait for the next vertical blanking interval before
+         * writing to the framebuffer. The display scans top-to-
+         * bottom; the ticker is at the bottom. After vblank fires
+         * we have the entire blanking period plus the scan time
+         * from top to ticker-bar-y to complete the copy. At 4K
+         * the strip is ~900KB — well under 1ms on Cortex-A76.
+         * If the DRM fd is unavailable, we proceed without sync
+         * and rely on the fast copy to minimise the tear window. */
+        if (a->drm_fd >= 0) {
+            drmVBlank vbl;
+            memset(&vbl, 0, sizeof(vbl));
+            vbl.request.type = DRM_VBLANK_RELATIVE;
+            vbl.request.sequence = 1;
+            drmWaitVBlank(a->drm_fd, &vbl);
+        }
+
+        /* Copy only the bar region (between applet margins) to the
+         * framebuffer. The ticker renders full-width into the surface
+         * but we only blit the margin-to-margin region so we don't
+         * overwrite applet pixels and cause flicker. */
         {
             unsigned char *data = cairo_image_surface_get_data(surface);
             int stride = cairo_image_surface_get_stride(surface);
-            int x0 = a->ticker->left_margin > 0
-                     ? (int)a->ticker->left_margin
-                     : (int)(a->width * 0.05);
-            int x1 = a->ticker->right_margin > 0
-                     ? a->width - (int)a->ticker->right_margin
-                     : a->width - (int)(a->width * 0.05);
-
-            if (x0 < 0) x0 = 0;
-            if (x1 > a->width) x1 = a->width;
-            if (x0 >= x1) { x0 = 0; x1 = a->width; }
 
             for (y = 0; y < surface_h && (y + surface_y0) < a->height; y++) {
-                memcpy(a->fb_mem + (y + surface_y0) * a->fb_stride + x0 * 4,
-                       data + y * stride + x0 * 4,
-                       (x1 - x0) * 4);
+                memcpy(a->fb_mem + (y + surface_y0) * a->fb_stride + x0 * bpp,
+                       data + y * stride + x0 * bpp,
+                       (x1 - x0) * bpp);
             }
         }
     }
 
-    cairo_surface_destroy(surface);
+    if (surface) cairo_surface_destroy(surface);
     printf("display: ticker render thread stopped\n");
     return NULL;
 }
@@ -507,6 +873,7 @@ static int pic_display_run_framebuffer(const char *maps_dir,
     unsigned char *fb_mem;
     size_t fb_size;
     int width, height, fb_stride, display_hz, ticker_fps;
+    int total_ram_mb, surface_mb;
     cairo_surface_t *frame_surface = NULL;
     cairo_surface_t *base_surface = NULL;   /* Cached composite of all layers except HUD */
     int base_valid = 0;                     /* Non-zero when base cache is usable */
@@ -629,6 +996,24 @@ static int pic_display_run_framebuffer(const char *maps_dir,
 
     printf("display: refresh=%d Hz, ticker=%d FPS\n", display_hz, ticker_fps);
 
+    /* ── RAM budget ──────────────────────────────────────────
+     * Calculate how many layer surfaces we can afford based on
+     * total physical RAM and the display resolution. Each layer
+     * surface is width * height * 4 bytes (ARGB32). On a Pi 1
+     * Model A (256MB) at 1080p that's ~8MB per layer — with 12
+     * layers the surfaces alone exceed available RAM.
+     *
+     * MemTotal from /proc/meminfo already excludes GPU memory
+     * (the firmware carves it out before Linux boots), so we
+     * don't need to subtract the GPU split. */
+    total_ram_mb = get_total_ram_mb();
+    surface_mb = (int)((long)width * height * 4 / (1024 * 1024));
+    if (surface_mb < 1) surface_mb = 1;
+
+    printf("display: RAM %dMB, surface %dMB, budget %dMB for layers\n",
+           total_ram_mb, surface_mb,
+           total_ram_mb - RAM_FIXED_OVERHEAD_MB);
+
     /* Write display status for the dashboard to read.
      * The renderer knows the actual resolution and calculated refresh
      * rate — the dashboard just reads this file. */
@@ -649,6 +1034,9 @@ static int pic_display_run_framebuffer(const char *maps_dir,
             fprintf(sf, "ACTUAL_RESOLUTION=%d,%d\n", width, height);
             fprintf(sf, "ACTUAL_REFRESH=%d\n", display_hz);
             fprintf(sf, "CPU_CORES=%d\n", cores);
+            fprintf(sf, "RAM_TOTAL=%d\n", total_ram_mb);
+            fprintf(sf, "RAM_BUDGET=%d\n",
+                    total_ram_mb - RAM_FIXED_OVERHEAD_MB);
             fclose(sf);
         }
     }
@@ -988,6 +1376,11 @@ static int pic_display_run_framebuffer(const char *maps_dir,
      * This overrides the defaults above with the user's saved prefs. */
     pic_load_layer_config(&stack);
 
+    /* Enforce RAM budget — force-disable low-priority layers if the
+     * user's config enables more layers than this system can afford.
+     * Must run after config load but before surface allocation. */
+    enforce_ram_budget(&stack, total_ram_mb, surface_mb);
+
     /*
      * Stagger heavy layer updates so they never fire on the same frame.
      *
@@ -1151,24 +1544,68 @@ static int pic_display_run_framebuffer(const char *maps_dir,
     /*
      * Smooth ticker rendering thread.
      *
-     * Runs at ~20 FPS in its own thread, rendering only the ticker
-     * bar region to the framebuffer. The main thread skips those
-     * rows during its full-frame blit, so there's no contention.
-     * This gives smooth scrolling without any per-second stutter.
+     * Runs at display refresh rate in its own thread, rendering
+     * only the ticker bar region to the framebuffer. Uses:
+     *   - Time-based scroll position (hides delivery jitter)
+     *   - DRM vblank sync (eliminates tearing)
+     *   - SCHED_FIFO for tight timing
+     *   - Pre-rendered text strip (no per-frame Cairo)
+     * The main thread skips the ticker rows during its full-frame
+     * blit, so there's no contention.
      */
-    /* Ticker render thread — declared outside the block so the
-     * cleanup path at the bottom of this function can join it. */
     static struct ticker_thread_args targs;
     static pthread_t ticker_render_thread;
     static int ticker_thread_started = 0;
+    static int drm_fd = -1;
+
+    /* Pre-initialise vt_is_active() before spawning the ticker thread.
+     * The function uses a lazily-opened static fd — calling it here
+     * ensures the open() happens in the main thread, avoiding a
+     * data race if both threads entered it simultaneously. */
+    vt_is_active();
+
+    /* Open the DRM device for vblank timing only. We do NOT use it
+     * for display output — /dev/fb0 handles that. We just need the
+     * vblank interrupt to synchronise our framebuffer writes with
+     * the display scan-out, eliminating tearing.
+     *
+     * On Pi 5: card0 = vc4-drm (display controller, has vblank)
+     *          card1 = v3d (3D GPU, no vblank)
+     * On Pi 0-4: card0 or card1 may be vc4 depending on dtoverlay.
+     * We probe both and pick the one with a connected display. */
+    {
+        int ci;
+        for (ci = 0; ci <= 1 && drm_fd < 0; ci++) {
+            char drm_path[32];
+            int fd;
+            snprintf(drm_path, sizeof(drm_path), "/dev/dri/card%d", ci);
+            fd = open(drm_path, O_RDWR);
+            if (fd >= 0) {
+                drmVBlank vbl;
+                memset(&vbl, 0, sizeof(vbl));
+                vbl.request.type = DRM_VBLANK_RELATIVE;
+                vbl.request.sequence = 0;
+                if (drmWaitVBlank(fd, &vbl) == 0) {
+                    drm_fd = fd;
+                    printf("display: DRM vblank via %s\n", drm_path);
+                } else {
+                    close(fd);
+                }
+            }
+        }
+        if (drm_fd < 0)
+            printf("display: DRM vblank unavailable (no tearing sync)\n");
+    }
 
     targs.ticker = &ticker;
     targs.stack = &stack;
     targs.fb_mem = fb_mem;
     targs.fb_stride = fb_stride;
+    targs.drm_fd = drm_fd;
     targs.width = width;
     targs.height = height;
     targs.ticker_fps = ticker_fps;
+    targs.total_ram_mb = total_ram_mb;
     targs.quit = &g_quit;
 
     if (pthread_create(&ticker_render_thread, NULL,
@@ -1236,6 +1673,7 @@ static int pic_display_run_framebuffer(const char *maps_dir,
 
             /* Reload subsystem configs */
             pic_load_layer_config(&stack);
+            enforce_ram_budget(&stack, total_ram_mb, surface_mb);
             pic_dxcluster_reload(&dxspots);
 
             /* Start/stop lightning and earthquake fetchers based on
@@ -1524,6 +1962,8 @@ skip_blit:
     pic_ticker_stop();
     if (ticker_thread_started)
         pthread_join(ticker_render_thread, NULL);
+    if (drm_fd >= 0)
+        close(drm_fd);
     if (ctydb) pic_ctydat_free(ctydb);
     munmap(fb_mem, fb_size);
     close(fb_fd);

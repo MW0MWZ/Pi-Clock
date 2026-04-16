@@ -506,6 +506,7 @@ static void *ticker_thread_func(void *arg)
 void pic_ticker_init(pic_ticker_t *ticker)
 {
     memset(ticker, 0, sizeof(*ticker));
+    ticker->headline_prev_idx = -1;  /* No previous headline yet */
     pthread_mutex_init(&ticker->mutex, NULL);
 }
 
@@ -561,7 +562,9 @@ void pic_ticker_load_config(pic_ticker_t *ticker)
                     printf("ticker: forcing headlines mode (single-core)\n");
                     enabled = TICKER_MODE_HEADLINES;
                 }
+                pthread_mutex_lock(&ticker->mutex);
                 ticker->mode = enabled;
+                pthread_mutex_unlock(&ticker->mutex);
                 printf("ticker: mode=%d\n", enabled);
                 continue;
             }
@@ -606,4 +609,5 @@ void pic_ticker_stop(void)
     if (!ticker_running) return;
     ticker_running = 0;
     pthread_join(ticker_thread, NULL);
+
 }
