@@ -169,6 +169,7 @@ var layerDefs = []struct {
 	{"grid", "Lat/Lon Grid", false, 1.0},
 	{"timezone", "Time Zones", true, 1.0},
 	{"cqzone", "CQ Zones", false, 1.0},
+	{"ituzone", "ITU Zones", false, 1.0},
 	{"maidenhead", "Maidenhead Grid", false, 1.0},
 	{"bandconditions", "Propagation Prediction", false, 1.0},
 	{"dxspots", "DX Cluster Spots", false, 1.0},

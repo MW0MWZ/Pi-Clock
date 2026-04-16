@@ -110,7 +110,8 @@ package() {
     cp /home/builder/blue_marble/*.jpg "\$DEST/blue_marble/"
     cp /home/builder/black_marble/*.jpg "\$DEST/black_marble/"
     cp /home/builder/borders.dat /home/builder/timezones.dat \
-       /home/builder/cqzones.dat /home/builder/cty.dat \
+       /home/builder/cqzones.dat /home/builder/ituzones.dat \
+       /home/builder/cty.dat \
        /home/builder/tzgrid.dat "\$DEST/"
     cp /home/builder/renderer-src/assets/splash.jpg "\$DEST/" 2>/dev/null || true
 }

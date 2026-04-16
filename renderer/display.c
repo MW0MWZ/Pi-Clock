@@ -97,6 +97,8 @@ extern void pic_layer_render_timezone(cairo_t *cr, int width, int height,
                                       time_t now, void *user_data);
 extern void pic_layer_render_cqzone(cairo_t *cr, int width, int height,
                                     time_t now, void *user_data);
+extern void pic_layer_render_ituzone(cairo_t *cr, int width, int height,
+                                     time_t now, void *user_data);
 extern void pic_layer_render_sun(cairo_t *cr, int width, int height,
                                  time_t now, void *user_data);
 extern void pic_layer_render_moon(cairo_t *cr, int width, int height,
@@ -471,6 +473,7 @@ static const struct {
 
     /* Optional overlays */
     {"cqzone",         0},  /* Static data                           */
+    {"ituzone",        0},  /* Static data                           */
     {"maidenhead",     0},  /* Calculated locally                    */
 
     /* Heavy — large data fetchers */
@@ -882,7 +885,9 @@ static int pic_display_run_framebuffer(const char *maps_dir,
     pic_borders_t borders;
     pic_borders_t timezones;
     pic_borders_t cqzones;
-    int borders_loaded = 0, timezones_loaded = 0, cqzones_loaded = 0;
+    pic_borders_t ituzones;
+    int borders_loaded = 0, timezones_loaded = 0;
+    int cqzones_loaded = 0, ituzones_loaded = 0;
     pic_ctydat_t *ctydb = NULL;
     pic_spotlist_t dxspots;
     pic_solar_data_t solar;
@@ -1104,6 +1109,9 @@ static int pic_display_run_framebuffer(const char *maps_dir,
         snprintf(path, sizeof(path), "%s/cqzones.dat", maps_dir);
         if (pic_borders_load(path, &cqzones) == 0) cqzones_loaded = 1;
 
+        snprintf(path, sizeof(path), "%s/ituzones.dat", maps_dir);
+        if (pic_borders_load(path, &ituzones) == 0) ituzones_loaded = 1;
+
         /* Load callsign prefix database for DX spot resolution */
         snprintf(path, sizeof(path), "%s/cty.dat", maps_dir);
         ctydb = pic_ctydat_load(path);
@@ -1303,6 +1311,9 @@ static int pic_display_run_framebuffer(const char *maps_dir,
     if (cqzones_loaded)
         pic_layer_stack_add(&stack, "cqzone",
                             pic_layer_render_cqzone, 0, 1.0, &cqzones);
+    if (ituzones_loaded)
+        pic_layer_stack_add(&stack, "ituzone",
+                            pic_layer_render_ituzone, 0, 1.0, &ituzones);
     pic_layer_stack_add(&stack, "maidenhead",
                         pic_layer_render_maidenhead, 0, 1.0, NULL);
 
@@ -1949,6 +1960,7 @@ skip_blit:
     if (borders_loaded) pic_borders_free(&borders);
     if (timezones_loaded) pic_borders_free(&timezones);
     if (cqzones_loaded) pic_borders_free(&cqzones);
+    if (ituzones_loaded) pic_borders_free(&ituzones);
     /* Stop all background threads and wait for them to exit.
      * Must complete before munmap — the ticker render thread
      * writes directly to fb_mem and would crash on SIGBUS. */

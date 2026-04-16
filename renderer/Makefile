@@ -32,7 +32,7 @@ ALL_LDFLAGS = $(LDFLAGS) $(CAIRO_LIBS) $(SDL2_LIBS) -lm -lpthread -lssl -lcrypto
 SOURCES = main.c display.c layer.c solar.c lunar.c image.c config.c borders.c \
           ctydat.c callsign_districts.c dxspot.c dxcluster.c \
           layers_base.c layers_daylight.c layers_grid.c \
-          layers_borders.c layers_timezone.c layers_cqzone.c \
+          layers_borders.c layers_timezone.c layers_cqzone.c layers_ituzone.c \
           layers_sun.c layers_moon.c layers_maidenhead.c \
           propagation.c layers_propagation.c \
           layers_dxspots.c layers_satellite.c layers_qth.c layers_hud.c \

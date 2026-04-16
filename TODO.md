@@ -27,6 +27,9 @@
 - [x] Logo branding — navbar, login, reboot/shutdown overlay
 - [x] Light/dark themes with logo-derived colour scheme (charcoal + gold)
 - [x] Mobile responsive improvements
+- [x] RAM budget warning — live banner when enabled layers exceed available memory
+- [x] Lightning/earthquake settings panels (fade time, display time)
+- [x] Gear icons for layer settings navigation
 
 ## Renderer — Completed Layers
 - [x] Base map (Blue Marble / Black Marble day/night blend)
@@ -35,6 +38,7 @@
 - [x] Lat/lon grid (10-degree intervals)
 - [x] Time zones (real Natural Earth boundaries, UTC offset labels)
 - [x] CQ Zones (real HB9HIL boundaries, zone labels with nudges)
+- [x] ITU Zones (HB9HIL boundaries, cyan dashed lines, zone labels)
 - [x] Sun position marker
 - [x] Moon position + phase display
 - [x] Maidenhead grid square overlay (2-char fields)
@@ -45,6 +49,13 @@
 - [x] QTH marker (home location pin with callsign label)
 - [x] Satellite tracking — SGP4 propagation, ground tracks, footprints
 - [x] News ticker — headlines + full news (chunked) and smooth scroll modes
+- [x] Lightning strikes — Blitzortung TLS WebSocket, LZW decode, bolt icons with fade
+- [x] Earthquakes — USGS GeoJSON, seismograph icons with concentric ripples
+- [x] Wind streamlines — GFS data via GitHub Action, Catmull-Rom Bézier, speed-scaled
+- [x] Cloud cover — GFS TCDC field, bilinear-scaled white haze
+- [x] Rain radar — GFS APCP field, NWS weather radar colour scheme
+- [x] Aurora oval — NOAA SWPC OVATION model, cool spectrum bilinear overlay
+- [x] Propagation prediction — heat map per band with legend
 
 ## Renderer — Completed Applets
 - [x] Applet framework — stackable overlay panels with dark backgrounds
@@ -66,18 +77,24 @@
 - [x] All network threads at nice(15) to prevent renderer starvation
 - [x] Bulk TLE from AMSAT (one request instead of 20+)
 - [x] Tmpfs caching for solar data, SDO images, TLEs
+- [x] Bilinear scaling for weather overlays (360x181 → display res, no blocky cells)
+- [x] Surface caching with dirty flags for weather layers (render once, paint cached)
+- [x] Lazy surface allocation (disabled layers = 0 bytes)
+- [x] Layer update stagger across 60-second window (prevents frame stalls)
+- [x] Smooth ticker scrolling — SCHED_FIFO, time-based position, TIMER_ABSTIME pacing
+- [x] RAM budget system — per-layer cost tracking, auto-disable on low-RAM Pi
+- [x] Wind tmpfs cleanup — delete gfs.bin.gz/gfs.bin after parsing (saves 1.6MB)
+- [x] Post-composite legend rendering (independent of layer opacity)
 
 ## Renderer — Next
-- [x] Propagation prediction overlay (heat map per band, inspired by MUF contour/isobar concept)
-- [ ] GPU compositing via DRM/KMS (further CPU reduction)
-- [ ] ITU zone overlay
 - [ ] DXCC entity boundaries
 - [ ] POTA/SOTA active spots
-- [ ] Aurora oval (NOAA SWPC API)
 - [ ] WSJT-X integration (local UDP)
 - [ ] RBN integration
 - [ ] PSKReporter / FT8
-- [x] Better callsign geolocation for DX spots — callsign district lookup table for US, Canada, Australia, Russia, Japan, Brazil, Italy, Spain
+- [ ] GPU compositing via DRM/KMS (further CPU reduction)
+- [ ] Log integration — worked/needed DXCC from ADIF import
+- [ ] Contest schedule overlay
 
 ## OS / Boot
 - [x] Framebuffer auto-detection from EDID

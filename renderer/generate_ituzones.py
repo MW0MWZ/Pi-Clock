@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-generate_cqzones.py - Download and convert CQ Zone GeoJSON to binary
+generate_ituzones.py - Download and convert ITU Zone GeoJSON to binary
 
-Downloads real CQ Zone boundaries from HB9HIL's hamradio-zones-geojson
+Downloads real ITU Zone boundaries from HB9HIL's hamradio-zones-geojson
 repository (MIT license) and converts to the binary polygon format.
 
 Source: https://github.com/HB9HIL/hamradio-zones-geojson
 License: MIT
 
 Usage:
-    python3 generate_cqzones.py <output.cqzones>
+    python3 generate_ituzones.py <output.ituzones>
 
 Copyright (C) 2026 Andy Taylor (MW0MWZ)
 SPDX-License-Identifier: GPL-2.0-only
@@ -23,7 +23,7 @@ import urllib.request
 
 GEOJSON_URL = (
     "https://raw.githubusercontent.com/HB9HIL/hamradio-zones-geojson/"
-    "main/cqzones.geojson"
+    "main/ituzones.geojson"
 )
 
 
@@ -34,7 +34,7 @@ def extract_polygons(geojson):
     for feature in geojson["features"]:
         geom = feature["geometry"]
         props = feature.get("properties", {})
-        zone_num = int(props.get("cq_zone_number", 0))
+        zone_num = int(props.get("itu_zone_number", 0))
 
         polys = []
         if geom["type"] == "Polygon":
@@ -69,12 +69,12 @@ def write_binary(zones, output_path):
 
 def main():
     if len(sys.argv) != 2:
-        print(f"Usage: {sys.argv[0]} <output.cqzones>", file=sys.stderr)
+        print(f"Usage: {sys.argv[0]} <output.ituzones>", file=sys.stderr)
         sys.exit(1)
 
     output_path = sys.argv[1]
 
-    print("Downloading CQ Zone boundaries from HB9HIL...")
+    print("Downloading ITU Zone boundaries from HB9HIL...")
     with urllib.request.urlopen(GEOJSON_URL) as response:
         data = response.read().decode("utf-8")
 
@@ -87,10 +87,12 @@ def main():
     print(f"  {len(zones)} polygons, {total_points} total points")
     print(f"  Zones: {min(zone_nums)}-{max(zone_nums)}")
 
-    if not zone_nums or min(zone_nums) < 1 or max(zone_nums) > 40:
+    # Sanity check — if the property key is wrong, all zone numbers
+    # will be 0. Fail loudly rather than producing wrong data.
+    if not zone_nums or min(zone_nums) < 1 or max(zone_nums) > 90:
         print(f"ERROR: unexpected zone numbers: {zone_nums[:10]}",
               file=sys.stderr)
-        print("Check 'cq_zone_number' key against the GeoJSON.",
+        print("Check 'itu_zone_number' key against the GeoJSON.",
               file=sys.stderr)
         sys.exit(1)
 

@@ -26,6 +26,7 @@ static const char *friendly_name(const char *name)
         {"grid",       "Lat/Lon Grid"},
         {"timezone",   "Time Zones"},
         {"cqzone",     "CQ Zones"},
+        {"ituzone",    "ITU Zones"},
         {"maidenhead", "Maidenhead"},
         {"bandconditions","Propagation Map"},
         {"dxspots",    "DX Spots"},
