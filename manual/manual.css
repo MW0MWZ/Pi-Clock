@@ -376,6 +376,14 @@ tr:hover td {
 .step-content { flex: 1; }
 .step-content h4 { margin-top: 0; }
 .step-content p { font-size: 0.95em; color: var(--text-muted); }
+.step-img {
+    display: block;
+    max-width: 480px;
+    margin: 12px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #ddd);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
 
 /* ── Layer / feature cards ───────────────────────────────────────── */
 .feature-block {

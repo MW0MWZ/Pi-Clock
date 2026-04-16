@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writing the SD Card - Pi-Clock Manual</title>
+    <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<nav class="topnav">
+    <div class="topnav-inner">
+        <a href="../index.html" class="topnav-brand">
+            <img src="../logo.png" alt="Pi-Clock">
+            Pi-Clock
+        </a>
+        <ul class="topnav-links">
+            <li><a href="index.html">Manual</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="quick-start.html">Quick Start</a></li>
+            <li><a href="installation.html">Installation</a></li>
+            <li><a href="display.html">Display</a></li>
+            <li><a href="applets.html">Applets</a></li>
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="configuration.html">Config</a></li>
+            <li><a href="hardware.html">Hardware</a></li>
+            <li><a href="../config-generator.html">Configurator</a></li>
+        </ul>
+        <button class="nav-toggle" onclick="document.querySelector('.topnav-links').classList.toggle('open')">&#9776;</button>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="page-header">
+        <h1>Writing the SD Card</h1>
+        <p class="subtitle">Step-by-step guide to writing the Pi-Clock OS image using Raspberry Pi Imager.</p>
+    </div>
+
+    <h2>What You Need</h2>
+
+    <ul>
+        <li>A <strong>micro SD card</strong> (4 GB minimum)</li>
+        <li>A computer with an SD card reader (Windows, macOS, or Linux)</li>
+        <li><a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> (free, from the Raspberry Pi Foundation)</li>
+        <li>The latest Pi-Clock OS image (<code>.img.xz</code>) from the <a href="../index.html">Pi-Clock home page</a></li>
+    </ul>
+
+    <h2>Step-by-Step with Raspberry Pi Imager</h2>
+
+    <div class="steps">
+
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+                <h4>Download the Pi-Clock image</h4>
+                <p>Download the latest <code>.img.xz</code> file from the <a href="../index.html">Pi-Clock home page</a>. Save it somewhere you can find it (e.g. your Downloads folder). You do <strong>not</strong> need to decompress it &mdash; Raspberry Pi Imager handles <code>.xz</code> files directly.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+                <h4>Open Raspberry Pi Imager</h4>
+                <p>Download and install <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> if you don't already have it. Launch the application. You'll see a step-based sidebar on the left.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+                <h4>Choose the device</h4>
+                <p>Click <strong>"Device"</strong> in the sidebar and select your Raspberry Pi model from the list. If your exact model isn't shown, select <strong>"No filtering"</strong> at the bottom &mdash; the Pi-Clock image works on all Pi models.</p>
+                <img src="images/imager-device.png" alt="Raspberry Pi Imager — Device selection showing Pi models and No filtering option" class="step-img">
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+                <h4>Choose the operating system</h4>
+                <p>Click <strong>"OS"</strong> in the sidebar, scroll to the <strong>very bottom</strong> of the list, and select <strong>"Use custom"</strong>. A file browser will open &mdash; navigate to the <code>.img.xz</code> file you downloaded in step 1 and select it.</p>
+                <img src="images/imager-os.png" alt="Raspberry Pi Imager — OS selection with Use custom highlighted at the bottom" class="step-img">
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+                <h4>Choose the SD card</h4>
+                <p>Click <strong>"Storage"</strong> in the sidebar and select your SD card from the list. <strong>Double-check you have the right device</strong> &mdash; the write will erase everything on the selected card.</p>
+                <img src="images/imager-storage.png" alt="Raspberry Pi Imager — Storage selection showing an SD card" class="step-img">
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-content">
+                <h4>Review and write</h4>
+                <p>The summary screen shows your selections. Check that the <strong>Operating system</strong> line shows your Pi-Clock <code>.img.xz</code> filename. When you're happy, click the red <strong>"WRITE"</strong> button.</p>
+                <img src="images/imager-summary.png" alt="Raspberry Pi Imager — Write summary showing Pi-Clock image and storage device" class="step-img">
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">7</div>
+            <div class="step-content">
+                <h4>Confirm and wait</h4>
+                <p>A warning dialog will appear telling you all data on the card will be erased. Click <strong>"I UNDERSTAND, ERASE AND WRITE"</strong> to proceed.</p>
+                <p>The write typically takes 2&ndash;5 minutes depending on your SD card speed. A progress bar shows the status. Do not remove the card until the write and verification are complete.</p>
+                <img src="images/imager-confirm.png" alt="Raspberry Pi Imager — Erase confirmation dialog" class="step-img">
+                <img src="images/imager-writing.png" alt="Raspberry Pi Imager — Writing in progress with progress bar" class="step-img">
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-num">8</div>
+            <div class="step-content">
+                <h4>Copy your configuration file</h4>
+                <p>Once the write is complete, Raspberry Pi Imager will automatically eject the card. <strong>Remove the SD card and re-insert it</strong> into your computer. A drive called <strong>"BOOT"</strong> will appear.</p>
+                <p>If you created a <code>pi-clock-config.txt</code> file using the <a href="../config-generator.html">Configurator</a>, copy it to the root of the <strong>BOOT</strong> drive now. This pre-configures your WiFi, callsign, location, and other settings so Pi-Clock is ready to go on first boot. See <a href="installation.html#zero-touch">Zero-Touch Configuration</a> for all available settings.</p>
+                <p>Eject the card safely, insert it into your Pi, and power on.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ─── Troubleshooting ──────────────────────────────────── -->
+    <h2>Troubleshooting</h2>
+
+    <div class="callout callout-warning">
+        <p><strong>SD card not writable or out of space?</strong> If Raspberry Pi Imager reports that the card cannot be written to, or shows insufficient space even on a card that should be large enough, the card likely has leftover partition tables from a previous OS. Use Imager to <strong>erase the card first</strong>: go to <strong>OS</strong> &rarr; select <strong>"Erase"</strong> &rarr; <strong>Storage</strong> &rarr; select your card &rarr; <strong>WRITE</strong>. Then start again from step 3.</p>
+    </div>
+
+    <div class="callout callout-info">
+        <p><strong>No "BOOT" drive after re-inserting?</strong> Some operating systems may not automatically mount the boot partition. On macOS, it should appear on the desktop and in Finder. On Windows, it appears as a drive letter in File Explorer. On Linux, you may need to run <code>mount /dev/sdX1 /mnt</code> manually.</p>
+    </div>
+
+    <!-- ─── Command Line Alternative ─────────────────────────── -->
+    <h2>Alternative: Command Line (Linux / macOS)</h2>
+
+    <p>If you prefer the command line, you can write the image directly with <code>dd</code>:</p>
+
+<pre><code><span class="comment"># Identify your SD card device</span>
+lsblk                          <span class="comment"># Linux</span>
+diskutil list                  <span class="comment"># macOS</span>
+
+<span class="comment"># Write the image (replace /dev/sdX with your SD card device)</span>
+xzcat pi-clock-os-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+sync</code></pre>
+
+    <div class="callout callout-warning">
+        <p><strong>Double-check the target device!</strong> The <code>dd</code> command will overwrite the entire device without confirmation.</p>
+    </div>
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+        <a href="quick-start.html">
+            <span class="label">Previous</span>
+            <span class="title">Quick Start</span>
+        </a>
+        <a href="installation.html" class="next">
+            <span class="label">Next</span>
+            <span class="title">Installation &amp; OS</span>
+        </a>
+    </div>
+
+    <footer class="manual-footer">
+        <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
+        <p style="margin-top: 6px;">
+            <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest">Releases</a>
+            <span class="footer-sep">&middot;</span>
+            <a href="https://github.com/MW0MWZ/Pi-Clock/issues">Issues</a>
+        </p>
+    </footer>
+
+</div>
+</body>
+</html>

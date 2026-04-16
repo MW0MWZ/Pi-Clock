@@ -54,20 +54,18 @@
         <div class="step">
             <div class="step-num">1</div>
             <div class="step-content">
-                <h4>Download &amp; Flash the SD Card Image</h4>
-                <p>Download the latest Pi-Clock OS image from the <a href="../index.html">Pi-Clock home page</a>. Flash it to your SD card using <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a>, <a href="https://etcher.balena.io/">balenaEtcher</a>, or <code>dd</code>:</p>
-<pre><code><span class="comment"># Example using dd (replace sdX with your SD card device)</span>
-xzcat pi-clock-os-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
-sync</code></pre>
+                <h4>Download &amp; Flash the SD Card</h4>
+                <p>Download the latest Pi-Clock OS image (<code>.img.xz</code>) from the <a href="../index.html">Pi-Clock home page</a> and write it to an SD card using <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a>. Select <strong>"Use custom"</strong> in the OS menu and choose the downloaded file.</p>
+                <p><a href="imaging.html"><strong>Need help? Full step-by-step imaging guide with screenshots &rarr;</strong></a></p>
             </div>
         </div>
 
         <div class="step">
             <div class="step-num">2</div>
             <div class="step-content">
-                <h4>Create Your Configuration</h4>
-                <p>Use the <a href="../config-generator.html">Config Generator</a> to set up your WiFi, callsign, location, and display settings. Click <strong>Detect My Location</strong> to auto-fill your timezone and coordinates, then download the generated <code>pi-clock-config.txt</code> file.</p>
-                <p>Copy the file to the SD card's <strong>boot</strong> partition (the FAT32 partition visible on any computer). It is processed on first boot and then automatically deleted. See <a href="installation.html#zero-touch">Zero-Touch Configuration</a> for all available options.</p>
+                <h4>Add Your Configuration</h4>
+                <p>After the write completes, Imager ejects the card. <strong>Remove it and re-insert it</strong> &mdash; a drive called <strong>"BOOT"</strong> will appear.</p>
+                <p>Use the <a href="../config-generator.html">Config Generator</a> to create a <code>pi-clock-config.txt</code> file with your WiFi, callsign, and location. Copy it to the <strong>BOOT</strong> drive, then eject safely.</p>
             </div>
         </div>
 
