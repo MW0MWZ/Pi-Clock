@@ -348,7 +348,7 @@ func updateConfigTxtResolution(res string) {
 
 	dims, ok := resMap[res]
 	if !ok {
-		return // "native" or unknown — don't touch config.txt
+		return // Unknown resolution — don't touch config.txt
 	}
 
 	data, err := os.ReadFile(configTxt)

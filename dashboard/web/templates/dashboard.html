@@ -77,7 +77,6 @@
                 <div class="form-group">
                     <label for="display_resolution">Resolution <span id="res-note" class="text-muted"></span></label>
                     <select id="display_resolution" class="form-control">
-                        <option value="native" {{if eq .Config.DisplayResolution "native"}}selected{{end}}>Native (auto-detect)</option>
                         <option value="720p" {{if eq .Config.DisplayResolution "720p"}}selected{{end}}>720p (1280x720)</option>
                         <option value="1080p" {{if eq .Config.DisplayResolution "1080p"}}selected{{end}}>1080p (1920x1080)</option>
                         <option value="1440p" {{if eq .Config.DisplayResolution "1440p"}}selected{{end}}>1440p (2560x1440)</option>

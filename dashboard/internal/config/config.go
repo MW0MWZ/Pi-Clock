@@ -49,7 +49,7 @@ func Load() *RendererConfig {
 		QthLon:            "0",
 		Callsign:          "",
 		GridSquare:        "",
-		DisplayResolution: "native",
+		DisplayResolution: "1080p",
 	}
 
 	cfg.Reload()
@@ -94,6 +94,12 @@ func (c *RendererConfig) Reload() {
 		case "GRID_SQUARE":
 			c.GridSquare = val
 		case "DISPLAY_RESOLUTION":
+			// Migrate legacy "native" value (removed in favour of explicit
+			// 1080p/720p/1440p/4k choices — native auto-detect never worked
+			// reliably on the Pi Zero W's bcm2708 framebuffer driver).
+			if val == "native" {
+				val = "1080p"
+			}
 			c.DisplayResolution = val
 		}
 	}
