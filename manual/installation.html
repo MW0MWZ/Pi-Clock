@@ -50,18 +50,80 @@
         <li>An imaging tool: <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a>, <a href="https://etcher.balena.io/">balenaEtcher</a>, or <code>dd</code></li>
     </ul>
 
-    <h3>Flashing the Image</h3>
+    <h3>Flashing with Raspberry Pi Imager (Recommended)</h3>
 
-    <p>Download the latest <code>.img.xz</code> file from the <a href="../index.html">Pi-Clock home page</a> and write it to the SD card:</p>
+    <p><a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> is the easiest way to write the image. It runs on Windows, macOS, and Linux, and handles <code>.img.xz</code> files directly &mdash; no need to decompress first.</p>
 
-<pre><code><span class="comment"># Using Raspberry Pi Imager: select "Use custom" and choose the .img.xz file</span>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+                <h4>Download the image</h4>
+                <p>Download the latest <code>.img.xz</code> file from the <a href="../index.html">Pi-Clock home page</a>. Save it somewhere you can find it (e.g. your Downloads folder).</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+                <h4>Open Raspberry Pi Imager</h4>
+                <p>Download and install <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> if you don't already have it. Launch the application.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+                <h4>Choose the device</h4>
+                <p>Click <strong>"Choose Device"</strong> and select your Raspberry Pi model. If your model isn't listed, select <strong>"No filtering"</strong> &mdash; the Pi-Clock image works on all models.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+                <h4>Choose the operating system</h4>
+                <p>Click <strong>"Choose OS"</strong>, scroll to the bottom of the list, and select <strong>"Use custom"</strong>. Browse to the <code>.img.xz</code> file you downloaded in step 1. Raspberry Pi Imager will decompress it automatically during the write.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+                <h4>Choose the SD card</h4>
+                <p>Click <strong>"Choose Storage"</strong> and select your SD card. Double-check you have the right device &mdash; the write will erase everything on it.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">6</div>
+            <div class="step-content">
+                <h4>Skip the customisation</h4>
+                <p>When Imager asks <strong>"Would you like to apply OS customisation settings?"</strong>, click <strong>"No"</strong>. Pi-Clock has its own configuration system (see <a href="#zero-touch">Zero-Touch Configuration</a> below) and does not use Raspberry Pi Imager's settings.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num">7</div>
+            <div class="step-content">
+                <h4>Write</h4>
+                <p>Click <strong>"Yes"</strong> to confirm, then wait for the write and verification to complete. This typically takes 2&ndash;5 minutes depending on your SD card speed.</p>
+            </div>
+        </div>
+    </div>
 
-<span class="comment"># Using dd on Linux/macOS (replace /dev/sdX with your SD card device)</span>
+    <div class="callout callout-warning">
+        <p><strong>SD card not writable or out of space?</strong> If Raspberry Pi Imager reports that the card cannot be written to, or shows insufficient space (even on a card that should be large enough), use the Imager to <strong>erase the card first</strong>: Choose Device &rarr; Choose OS &rarr; select <strong>"Erase"</strong> (under "Other") &rarr; Choose Storage &rarr; Write. Then try again with the Pi-Clock image. This clears any leftover partition tables that confuse the writer.</p>
+    </div>
+
+    <h3>Alternative: Command Line (Linux / macOS)</h3>
+
+    <p>If you prefer the command line, use <code>dd</code> to write the image directly:</p>
+
+<pre><code><span class="comment"># Identify your SD card device</span>
+lsblk                          <span class="comment"># Linux</span>
+diskutil list                  <span class="comment"># macOS</span>
+
+<span class="comment"># Write the image (replace /dev/sdX with your SD card device)</span>
 xzcat pi-clock-os-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
 sync</code></pre>
 
     <div class="callout callout-warning">
-        <p><strong>Double-check the target device!</strong> The <code>dd</code> command will overwrite the entire device without confirmation. Use <code>lsblk</code> (Linux) or <code>diskutil list</code> (macOS) to identify the correct SD card device.</p>
+        <p><strong>Double-check the target device!</strong> The <code>dd</code> command will overwrite the entire device without confirmation.</p>
     </div>
 
     <!-- ─── APK Install ────────────────────────────────────────── -->
