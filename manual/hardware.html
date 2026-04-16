@@ -248,6 +248,11 @@
                 <td>Frequent updates but lightweight rendering. Lightning and earthquake layers re-render every second but draw very few primitives.</td>
             </tr>
             <tr>
+                <td><span class="badge green">Zero (cached)</span></td>
+                <td>Rain Radar, Cloud Cover, Wind, Aurora</td>
+                <td>Rendered once when new data arrives (every 6h for GFS, 15min for aurora), then cached on a surface. Zero per-frame cost. Wind streamlines take ~2-3s to compute on Pi Zero W but this happens only every few hours.</td>
+            </tr>
+            <tr>
                 <td><span class="badge gold">Medium</span></td>
                 <td>Daylight, News Ticker (smooth scroll), Satellite Tracking</td>
                 <td>Daylight does per-pixel solar math every 60s. Satellites propagate on every frame. Smooth scroll animates continuously.</td>
@@ -398,6 +403,8 @@
             <tr><td>Propagation predictions (accurate)</td><td>Yes (live SFI/Kp from NOAA)</td></tr>
             <tr><td>Lightning strikes</td><td>Yes (Blitzortung WebSocket)</td></tr>
             <tr><td>Earthquakes</td><td>Yes (USGS GeoJSON, polled every 60s)</td></tr>
+            <tr><td>Rain radar / Cloud cover / Wind</td><td>Yes (GFS data via GitHub Action, every 6h)</td></tr>
+            <tr><td>Aurora</td><td>Yes (NOAA SWPC, polled every 15min)</td></tr>
             <tr><td>News ticker</td><td>Yes (RSS feeds)</td></tr>
             <tr><td>Web dashboard access</td><td>Yes (local network)</td></tr>
         </tbody>

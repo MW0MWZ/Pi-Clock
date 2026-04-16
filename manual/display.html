@@ -52,30 +52,43 @@
             <tr>
                 <th>Layer</th>
                 <th>Default</th>
-                <th>Update Interval</th>
+                <th>Update</th>
+                <th>CPU</th>
                 <th>Network</th>
             </tr>
         </thead>
         <tbody>
-            <tr><td>Base Map (Night)</td><td>On</td><td>Static</td><td>No</td></tr>
-            <tr><td>Daylight (Day/Night Blend)</td><td>On</td><td>60s</td><td>No</td></tr>
-            <tr><td>Country Borders</td><td>On</td><td>Static</td><td>No</td></tr>
-            <tr><td>Lat/Lon Grid</td><td>Off</td><td>Static</td><td>No</td></tr>
-            <tr><td>Time Zones</td><td>On</td><td>Static</td><td>No</td></tr>
-            <tr><td>CQ Zones</td><td>Off</td><td>Static</td><td>No</td></tr>
-            <tr><td>Maidenhead Grid</td><td>Off</td><td>Static</td><td>No</td></tr>
-            <tr><td>Sun Position</td><td>Off</td><td>60s</td><td>No</td></tr>
-            <tr><td>Moon Position</td><td>Off</td><td>60s</td><td>No</td></tr>
-            <tr><td>DX Cluster Spots</td><td>Off</td><td>30&ndash;60s</td><td>Yes</td></tr>
-            <tr><td>Propagation Heat Map</td><td>Off</td><td>10s cycle</td><td>Yes*</td></tr>
-            <tr><td>Satellite Tracking</td><td>Off</td><td>Real-time</td><td>Yes**</td></tr>
-            <tr><td>Lightning Strikes</td><td>Off</td><td>1s</td><td>Yes</td></tr>
-            <tr><td>Earthquakes</td><td>Off</td><td>1s</td><td>Yes</td></tr>
-            <tr><td>Home QTH Marker</td><td>On</td><td>60s</td><td>No</td></tr>
-            <tr><td>Clock / HUD</td><td>On</td><td>1s / 60s***</td><td>No</td></tr>
-            <tr><td>News Ticker</td><td>Off</td><td>15min</td><td>Yes</td></tr>
+            <tr><td>Base Map (Night)</td><td>On</td><td>Static</td><td><span class="badge green">None</span></td><td>No</td></tr>
+            <tr><td>Daylight (Day/Night Blend)</td><td>On</td><td>60s</td><td><span class="badge gold">Med</span></td><td>No</td></tr>
+            <tr><td>Country Borders</td><td>On</td><td>Static</td><td><span class="badge green">None</span></td><td>No</td></tr>
+            <tr><td>Lat/Lon Grid</td><td>Off</td><td>Static</td><td><span class="badge green">None</span></td><td>No</td></tr>
+            <tr><td>Time Zones</td><td>On</td><td>Static</td><td><span class="badge green">None</span></td><td>No</td></tr>
+            <tr><td>CQ Zones</td><td>Off</td><td>Static</td><td><span class="badge green">None</span></td><td>No</td></tr>
+            <tr><td>Maidenhead Grid</td><td>Off</td><td>Static</td><td><span class="badge green">None</span></td><td>No</td></tr>
+            <tr><td>Sun Position</td><td>Off</td><td>60s</td><td><span class="badge green">Low</span></td><td>No</td></tr>
+            <tr><td>Moon Position</td><td>Off</td><td>60s</td><td><span class="badge green">Low</span></td><td>No</td></tr>
+            <tr><td>DX Cluster Spots</td><td>Off</td><td>5s</td><td><span class="badge gold">Med</span></td><td>Yes</td></tr>
+            <tr><td>Propagation Heat Map</td><td>Off</td><td>10s</td><td><span class="badge orange">High</span></td><td>Yes*</td></tr>
+            <tr><td>Satellite Tracking</td><td>Off</td><td>5s</td><td><span class="badge gold">Med</span></td><td>Yes**</td></tr>
+            <tr><td>Lightning Strikes</td><td>Off</td><td>1s</td><td><span class="badge green">Low</span></td><td>Yes</td></tr>
+            <tr><td>Earthquakes</td><td>Off</td><td>1s</td><td><span class="badge green">Low</span></td><td>Yes</td></tr>
+            <tr><td>Rain Radar</td><td>Off</td><td>6h</td><td><span class="badge green">Low</span></td><td>Yes</td></tr>
+            <tr><td>Cloud Cover</td><td>Off</td><td>6h</td><td><span class="badge green">Low</span></td><td>Yes</td></tr>
+            <tr><td>Wind</td><td>Off</td><td>6h</td><td><span class="badge green">Low</span></td><td>Yes</td></tr>
+            <tr><td>Aurora</td><td>Off</td><td>15min</td><td><span class="badge green">Low</span></td><td>Yes</td></tr>
+            <tr><td>Home QTH Marker</td><td>On</td><td>Static</td><td><span class="badge green">None</span></td><td>No</td></tr>
+            <tr><td>Clock / HUD</td><td>On</td><td>1s***</td><td><span class="badge green">Low</span></td><td>No</td></tr>
+            <tr><td>News Ticker</td><td>Off</td><td>15min</td><td><span class="badge green">Low</span></td><td>Yes</td></tr>
         </tbody>
     </table>
+
+    <p style="font-size: 0.85em; color: var(--text-muted);">
+        <strong>CPU key:</strong>
+        <span class="badge green">None</span> = static, rendered once and cached.
+        <span class="badge green">Low</span> = lightweight or surface-cached, negligible ongoing cost.
+        <span class="badge gold">Med</span> = moderate computation every few seconds.
+        <span class="badge orange">High</span> = heavy computation (staggered to avoid frame drops on Pi Zero W).
+    </p>
 
     <p style="font-size: 0.85em; color: var(--text-muted);">
         * Propagation uses live SFI from NOAA but works with defaults (SFI=100) if offline.<br>
@@ -368,6 +381,85 @@
         </div>
 
         <p><strong>Dashboard:</strong> Toggle on/off. When enabled, a settings card appears with a display time dropdown.</p>
+    </div>
+
+    <!-- ── Weather Data ────────────────────────────────────────── -->
+    <h2>Weather Data Layers</h2>
+
+    <div class="feature-block">
+        <h3>Rain Radar</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 6h (GFS)</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>Displays global precipitation using the standard weather radar colour scheme. Data comes from the NOAA GFS model (APCP field, 6-hour accumulated precipitation), pre-processed by a GitHub Action and served as a compact binary from the Pi-Clock data server.</p>
+        <h4>Colour Scheme</h4>
+        <ul>
+            <li><strong style="color:#48bb78;">Green</strong> &mdash; light rain / drizzle (&lt;2mm)</li>
+            <li><strong style="color:#ffcc33;">Yellow</strong> &mdash; moderate rain (2&ndash;5mm)</li>
+            <li><strong style="color:#ed8936;">Orange</strong> &mdash; heavy rain (5&ndash;10mm)</li>
+            <li><strong style="color:#ff4444;">Red</strong> &mdash; very heavy / thunderstorm (10&ndash;20mm)</li>
+            <li><strong style="color:#cc44cc;">Magenta</strong> &mdash; severe / torrential (20&ndash;40mm)</li>
+            <li><strong style="color:#9944cc;">Purple</strong> &mdash; extreme (40mm+)</li>
+        </ul>
+        <p>The overlay uses bilinear scaling for smooth, non-blocky edges. Cached on a surface &mdash; zero per-frame cost.</p>
+        <p><strong>Data source:</strong> NOAA GFS APCP field (public domain). Updated every 6 hours via GitHub Action.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Cloud Cover</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 6h (GFS)</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>Displays total cloud cover as a semi-transparent white haze overlay. Cloudy areas appear as white with opacity proportional to cloud coverage. Clear areas are fully transparent. Uses bilinear scaling for soft, natural cloud edges.</p>
+        <p><strong>Data source:</strong> NOAA GFS TCDC field (Total Cloud Cover, 0&ndash;100%). Same data download as wind and rain radar.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Wind</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 6h (GFS)</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>Displays global surface wind as flowing streamline traces across the map. Each streamline is a smooth B&eacute;zier curve that follows the wind direction, with a bright white head (showing where the wind blows) fading to transparent at the tail.</p>
+        <h4>Visual Style</h4>
+        <ul>
+            <li><strong>Density</strong> &mdash; more streamlines appear where the wind is stronger</li>
+            <li><strong>Brightness</strong> &mdash; stronger wind produces brighter, more visible traces</li>
+            <li><strong>Length</strong> &mdash; light breezes get short tails (4 steps), storms get long dramatic tails (18 steps)</li>
+            <li><strong>Gradient</strong> &mdash; each streamline fades from transparent (tail) to bright white (head) using a linear gradient stroke</li>
+        </ul>
+        <p>8000 streamlines are rendered once when new data arrives and cached on a surface &mdash; zero per-frame cost. Wind data updates every 6 hours from NOAA GFS.</p>
+        <p><strong>Data source:</strong> NOAA GFS UGRD/VGRD fields (U and V wind components at 10m above ground). Pre-processed by a GitHub Action.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
+    </div>
+
+    <div class="feature-block">
+        <h3>Aurora</h3>
+        <div class="feature-meta">
+            <span class="tag">Updates: 15min</span>
+            <span class="tag">Default: Off</span>
+            <span class="tag">Requires Network</span>
+        </div>
+        <p>Displays the aurora borealis (north) and aurora australis (south) as a translucent glow overlay based on the NOAA SWPC OVATION model. The aurora oval shape emerges naturally from the probability data.</p>
+        <h4>Colour Scheme</h4>
+        <p>Uses a cool spectrum (distinct from the warm rain radar palette):</p>
+        <ul>
+            <li><strong>Low probability (5&ndash;20%)</strong> &mdash; dim teal/cyan glow</li>
+            <li><strong>Medium (20&ndash;50%)</strong> &mdash; bright cyan-green</li>
+            <li><strong>High (50&ndash;80%)</strong> &mdash; green shifting to white</li>
+            <li><strong>Very high (80%+)</strong> &mdash; intense blue-white</li>
+        </ul>
+        <p>During quiet geomagnetic conditions (Kp 0&ndash;1), the aurora is faint and confined to high latitudes. During geomagnetic storms (Kp 5+), the oval expands dramatically toward lower latitudes with much higher probability values.</p>
+        <p>Data is fetched directly from NOAA SWPC every 15 minutes &mdash; no GitHub Action needed. Uses bilinear scaling for smooth edges.</p>
+        <p><strong>Data source:</strong> NOAA SWPC OVATION aurora nowcast (public domain). JSON probability grid fetched directly by the Pi.</p>
+        <p><strong>Dashboard:</strong> Toggle on/off, adjust opacity.</p>
     </div>
 
     <!-- ── HUD & Information ─────────────────────────────────── -->
