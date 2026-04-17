@@ -787,15 +787,14 @@ function saveLayers() {
 
     apiCall('PUT', '/api/layers', layers).then(function() {
         toast('Layers saved');
-        /* Sync dxfeed applet toggle with dxspots layer state —
-         * the renderer auto-disables the applet when the layer
-         * is off, so the dashboard should reflect that. */
-        var dxToggle = document.querySelector('[data-layer="dxspots"]');
-        var dxfeedToggle = document.querySelector('[data-applet="dxfeed"]');
-        if (dxToggle && dxfeedToggle && dxfeedToggle.checked !== dxToggle.checked) {
-            dxfeedToggle.checked = dxToggle.checked;
-            saveApplets();
-        }
+        /* The renderer auto-hides the dxfeed applet while the
+         * dxspots layer is off, so no dashboard-side sync is
+         * needed here — a prior implementation toggled a now-
+         * removed checkbox and had been silently dead. If we
+         * ever want the Applets board to visibly move the
+         * dxfeed card to the Disabled column when the layer
+         * flips off, it'll need a DOM-level move-and-save
+         * rather than a hidden toggle. */
     }).catch(function() {
         toast('Save failed', 'error');
     });
@@ -1024,51 +1023,279 @@ function saveEarthquakeSettings() {
 }
 
 // ── Applet controls ─────────────────────────────────────────
+/* ── Applet drag-and-drop board ─────────────────────────────
+ * Three droppable columns: Left panel, Right panel, Disabled.
+ * Each `.applet-card` is draggable between columns (changes side,
+ * or toggles the enabled bit when moved to/from Disabled) and
+ * reorderable within a column (changes the visual stacking order
+ * on the display).
+ *
+ * The backend persists the configured applets in the exact order
+ * the UI sends them — first-in-array = top of the on-screen panel
+ * within each side. saveApplets() walks the two active columns in
+ * DOM order (top to bottom) to reconstruct that, then appends
+ * disabled cards with their last-known side so the renderer still
+ * has a stable "where would this go if re-enabled" answer. */
+
+/* Element currently being dragged — module-scoped because dragover
+ * and drop handlers on potential targets need to know which card is
+ * in flight. The native DataTransfer object would also work but
+ * can't carry a direct element reference across handlers. */
+var dragApplet = null;
+
+/* Single reusable drop-position indicator. Lazily created on the
+ * first drag, then moved around the DOM during dragover to preview
+ * where the card will land. Kept as a module-scoped singleton so
+ * we never have more than one indicator visible at a time. */
+var dropIndicator = null;
+
+function getDropIndicator() {
+    if (!dropIndicator) {
+        dropIndicator = document.createElement('div');
+        dropIndicator.className = 'applet-drop-indicator';
+        dropIndicator.setAttribute('aria-hidden', 'true');
+    }
+    return dropIndicator;
+}
+
+function removeDropIndicator() {
+    if (dropIndicator && dropIndicator.parentNode) {
+        dropIndicator.parentNode.removeChild(dropIndicator);
+    }
+}
+
+/* Position the indicator inside `zone` at the slot that would be
+ * chosen if the user released at clientY. Uses the same "cursor
+ * above the midpoint" rule as onAppletDrop, so preview and drop
+ * land on the same slot. Skips the dragged card and the indicator
+ * itself when searching, so self-placement and re-entry don't
+ * confuse the calculation. */
+function updateDropIndicator(zone, clientY) {
+    if (!dragApplet) return;
+    var ind = getDropIndicator();
+    var children = Array.prototype.slice.call(zone.children);
+    var insertBefore = null;
+    for (var i = 0; i < children.length; i++) {
+        var el = children[i];
+        if (el === dragApplet || el === ind) continue;
+        if (!el.classList || !el.classList.contains('applet-card')) continue;
+        var rect = el.getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) {
+            insertBefore = el;
+            break;
+        }
+    }
+    if (insertBefore) {
+        zone.insertBefore(ind, insertBefore);
+    } else {
+        zone.appendChild(ind);
+    }
+}
+
 function loadApplets() {
     apiCall('GET', '/api/applets').then(function(applets) {
-        var container = document.getElementById('applet-controls');
-        if (!container) return;
-        container.innerHTML = '';
-
-        applets.forEach(function(applet) {
-            var row = buildToggleRow('data-applet', applet.name,
-                                     applet.label, applet.enabled);
-
-            /* Side picker dropdown */
-            var sel = document.createElement('select');
-            sel.className = 'form-control';
-            sel.setAttribute('data-applet-side', applet.name);
-            sel.style.cssText = 'width:auto; padding:4px 8px; font-size:12px';
-            ['left', 'right'].forEach(function(side) {
-                var opt = document.createElement('option');
-                opt.value = side;
-                opt.textContent = side.charAt(0).toUpperCase() + side.slice(1);
-                if (applet.side === side) opt.selected = true;
-                sel.appendChild(opt);
-            });
-            row.appendChild(sel);
-
-            container.appendChild(row);
+        /* Clear every dropzone — the server's response is the
+         * source of truth, so a rebuild from scratch avoids stale
+         * cards from a prior page state. */
+        ['left', 'right', 'disabled'].forEach(function(bucket) {
+            var zone = document.querySelector(
+                '[data-applet-dropzone="' + bucket + '"]');
+            if (zone) zone.innerHTML = '';
         });
+
+        /* Render each applet into its current bucket in the
+         * order the server returned it. "disabled" is inferred
+         * from the enabled flag, not from a separate field. */
+        applets.forEach(function(applet) {
+            var bucket = applet.enabled ? applet.side : 'disabled';
+            /* Guard against an unexpected side value from an
+             * older config file — send it to disabled rather
+             * than dropping the card. */
+            if (bucket !== 'left' && bucket !== 'right' && bucket !== 'disabled') {
+                bucket = 'disabled';
+            }
+            var zone = document.querySelector(
+                '[data-applet-dropzone="' + bucket + '"]');
+            if (zone) zone.appendChild(buildAppletCard(applet));
+        });
+
+        wireAppletCards();
     }).catch(function() {});
 }
 
+/* Attach drop handlers to the three dropzone elements ONCE — they are
+ * static HTML that never gets rebuilt. Called from DOMContentLoaded.
+ * Kept separate from wireAppletCards so repeated loadApplets() calls
+ * (future polling, manual refresh) can't stack duplicate listeners
+ * on the zones. */
+function initAppletDropzones() {
+    document.querySelectorAll('.applet-dropzone').forEach(function(zone) {
+        zone.addEventListener('dragover',  onAppletDragOver);
+        zone.addEventListener('dragleave', onAppletDragLeave);
+        zone.addEventListener('drop',      onAppletDrop);
+    });
+}
+
+/* Build a single draggable applet card. The card carries its
+ * display-independent state (name, label, last side) as data-*
+ * attributes so the DOM is the authoritative model — saveApplets()
+ * can reconstruct the payload from nothing but the rendered tree. */
+function buildAppletCard(applet) {
+    var card = document.createElement('div');
+    card.className = 'applet-card';
+    card.setAttribute('draggable', 'true');
+    card.setAttribute('data-applet-name', applet.name);
+    /* data-applet-last-side remembers where the applet was before
+     * it was dragged to Disabled, so re-enabling (back into Left
+     * or Right directly) doesn't need a round-trip to pick a
+     * default. Updated on every drop into a non-disabled column. */
+    card.setAttribute('data-applet-last-side',
+        (applet.side === 'left' || applet.side === 'right') ? applet.side : 'right');
+
+    var grip = document.createElement('span');
+    grip.className = 'applet-card-grip';
+    grip.setAttribute('aria-hidden', 'true');
+    card.appendChild(grip);
+
+    var label = document.createElement('span');
+    label.textContent = applet.label;
+    card.appendChild(label);
+
+    return card;
+}
+
+/* Attach drag handlers to every card. Cards are rebuilt on each
+ * loadApplets() call, so listeners ride with the new DOM — old cards
+ * are garbage-collected with their listeners. Dropzone listeners are
+ * wired separately in initAppletDropzones() because those elements
+ * persist across rebuilds. */
+function wireAppletCards() {
+    document.querySelectorAll('.applet-card').forEach(function(card) {
+        card.addEventListener('dragstart', onAppletDragStart);
+        card.addEventListener('dragend',   onAppletDragEnd);
+    });
+}
+
+function onAppletDragStart(e) {
+    dragApplet = this;
+    this.classList.add('dragging');
+    /* Required for Firefox — without setData the drag events
+     * don't fire at all. The value is ignored; we use the
+     * dragApplet module variable for the actual payload. */
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.getAttribute('data-applet-name') || '');
+    }
+}
+
+function onAppletDragEnd() {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.applet-dropzone.drag-over').forEach(function(z) {
+        z.classList.remove('drag-over');
+    });
+    /* Always clear the indicator when the drag ends — drops go
+     * through onAppletDrop (which also removes it) but cancelled
+     * drags only fire dragend, so we need the cleanup here too. */
+    removeDropIndicator();
+    dragApplet = null;
+}
+
+function onAppletDragOver(e) {
+    if (!dragApplet) return;
+    e.preventDefault(); /* required so drop will fire */
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    this.classList.add('drag-over');
+    /* Move the indicator to the slot the cursor is currently over.
+     * dragover fires continuously during the drag, so this preview
+     * follows the pointer in real time. */
+    updateDropIndicator(this, e.clientY);
+}
+
+function onAppletDragLeave(e) {
+    /* dragleave fires when leaving child nodes too — only clear
+     * the highlight when we actually leave the zone rectangle.
+     * relatedTarget is null when the pointer leaves the window. */
+    if (e.relatedTarget && this.contains(e.relatedTarget)) return;
+    this.classList.remove('drag-over');
+    /* Remove the indicator only if it lives in THIS zone. When the
+     * user sweeps the card into another zone, dragover there will
+     * move the same indicator element into the new zone before we
+     * get here — so we must not remove it from under that zone. */
+    if (dropIndicator && dropIndicator.parentNode === this) {
+        this.removeChild(dropIndicator);
+    }
+}
+
+function onAppletDrop(e) {
+    e.preventDefault();
+    this.classList.remove('drag-over');
+    if (!dragApplet) return;
+
+    /* The indicator has been tracking the cursor via dragover, so
+     * by the time we get here it already sits in the exact slot
+     * the user targeted. Insert the dragged card at that slot,
+     * then remove the indicator. */
+    var ind = dropIndicator;
+    if (ind && ind.parentNode === this) {
+        /* No-op guard: if the card is already immediately before
+         * the indicator, inserting it there would be a redundant
+         * DOM move (and harmless), but we skip it so the browser
+         * doesn't flash the card's rendering for no reason. */
+        if (dragApplet.nextElementSibling !== ind) {
+            this.insertBefore(dragApplet, ind);
+        }
+        this.removeChild(ind);
+    } else if (dragApplet.parentNode !== this) {
+        /* Safety net: indicator missing (e.g. drop fired before any
+         * dragover, rare but not impossible) and the card is in a
+         * different zone. Append to this zone so we never lose the
+         * card. onAppletDragEnd will still clean up the indicator. */
+        this.appendChild(dragApplet);
+    }
+
+    /* If we dropped into Left or Right, remember that as the
+     * applet's "last side" so a later move into Disabled still
+     * knows the preferred column for re-enablement. */
+    var bucket = this.getAttribute('data-applet-dropzone');
+    if (bucket === 'left' || bucket === 'right') {
+        dragApplet.setAttribute('data-applet-last-side', bucket);
+    }
+}
+
+/* Serialise the DOM tree into the payload expected by PUT /api/applets.
+ * Walks Left, then Right, then Disabled. Order within each column is
+ * DOM order (top to bottom), which is exactly the order the renderer
+ * will use when stacking the panels. */
 function saveApplets() {
     var applets = [];
-    document.querySelectorAll('[data-applet]').forEach(function(toggle) {
-        var name = toggle.getAttribute('data-applet');
-        var sideEl = document.querySelector('[data-applet-side="' + name + '"]');
-        applets.push({
-            name: name,
-            enabled: toggle.checked,
-            side: sideEl ? sideEl.value : 'right'
+
+    function collect(bucket, isEnabled) {
+        var zone = document.querySelector('[data-applet-dropzone="' + bucket + '"]');
+        if (!zone) return;
+        zone.querySelectorAll('.applet-card').forEach(function(card) {
+            var name = card.getAttribute('data-applet-name');
+            if (!name) return;
+            /* Enabled cards use the bucket they were dropped into
+             * ("left" or "right"). Disabled cards fall back to
+             * data-applet-last-side so a later re-enable lands in
+             * the column the user last chose — with a right-side
+             * fallback that matches the backend's own default when
+             * no prior preference exists. */
+            var side = isEnabled
+                ? bucket
+                : (card.getAttribute('data-applet-last-side') || 'right');
+            applets.push({ name: name, enabled: isEnabled, side: side });
         });
-    });
+    }
+
+    collect('left', true);
+    collect('right', true);
+    collect('disabled', false);
 
     apiCall('PUT', '/api/applets', applets).then(function() {
         toast('Panel settings saved');
-    }).catch(function() {
-        toast('Save failed', 'error');
+    }).catch(function(err) {
+        toast(err && err.message ? err.message : 'Save failed', 'error');
     });
 }
 
@@ -1200,27 +1427,122 @@ function saveHostname() {
 function loadWifi() {
     apiCall('GET', '/api/network/wifi').then(function(wifi) {
         if (wifi.ssid) document.getElementById('wifi_ssid').value = wifi.ssid;
-        if (wifi.country) document.getElementById('wifi_country').value = wifi.country;
+        /* Only select the country if the backend reports one that the
+         * dropdown actually lists — otherwise fall through to the
+         * <select>'s default ('GB'). Prevents an unlisted value from
+         * leaving the control blank and confusing a subsequent save. */
+        if (wifi.country) {
+            var sel = document.getElementById('wifi_country');
+            var match = false;
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === wifi.country) { match = true; break; }
+            }
+            if (match) sel.value = wifi.country;
+        }
+        var openBox = document.getElementById('wifi_open');
+        if (openBox) {
+            openBox.checked = !!wifi.open_network;
+            onWifiOpenToggle();
+        }
     }).catch(function() {});
 }
+
+/* Disable the password field while "Open network" is ticked. The
+ * backend ignores the password in open-network mode anyway, but
+ * hiding it from input makes the UX match the underlying behaviour
+ * and avoids the user believing a typed password took effect. */
+function onWifiOpenToggle() {
+    var openBox = document.getElementById('wifi_open');
+    var pw = document.getElementById('wifi_password');
+    if (!openBox || !pw) return;
+    pw.disabled = openBox.checked;
+    if (openBox.checked) pw.value = '';
+    pw.placeholder = openBox.checked
+        ? 'Not required for open networks'
+        : 'Leave blank to keep current';
+}
+
+/* Delay, in milliseconds, between the "config saved" toast and the
+ * actual wpa_supplicant reload. Gives the user a beat to register that
+ * the save succeeded before their radio reassociates and (if they're
+ * editing over WiFi) their session potentially drops. */
+var WIFI_APPLY_DELAY_MS = 5000;
 
 function saveWifi() {
     var ssid = val('wifi_ssid');
     if (!ssid) { toast('SSID is required', 'error'); return; }
+
     var country = (val('wifi_country') || 'GB').toUpperCase();
     if (!/^[A-Z]{2}$/.test(country)) {
         toast('Country code must be two letters (e.g. GB)', 'error'); return;
     }
 
+    var openBox = document.getElementById('wifi_open');
+    var openNetwork = !!(openBox && openBox.checked);
+    var password = openNetwork ? '' : val('wifi_password');
+
+    /* Fail fast on an obviously-too-short passphrase rather than
+     * round-tripping to the server. A blank password is explicitly
+     * allowed (keeps the existing PSK when the SSID is unchanged,
+     * which the backend enforces); the check only kicks in when the
+     * user has typed something. */
+    if (password && password.length < 8) {
+        toast('WiFi password must be 8-63 characters', 'error'); return;
+    }
+
     apiCall('PUT', '/api/network/wifi', {
         ssid: ssid,
-        password: val('wifi_password'),
-        country: val('wifi_country') || 'GB'
+        password: password,
+        country: country,
+        open_network: openNetwork
     }).then(function() {
         document.getElementById('wifi_password').value = '';
         toast('WiFi configuration saved');
-    }).catch(function() {
-        toast('WiFi save failed', 'error');
+        /* Schedule the apply step. Deliberately detached from the
+         * save Promise chain so a failing/slow connect doesn't retro-
+         * actively mark the save itself as failed — the config is
+         * already on disk either way. */
+        setTimeout(applyWifi, WIFI_APPLY_DELAY_MS);
+    }).catch(function(err) {
+        /* Surface the backend's validation message where possible so
+         * users can tell a country/SSID/password validation failure
+         * apart from a server-side error. apiCall rethrows with the
+         * body.error text when the response is non-2xx. */
+        toast(err && err.message ? err.message : 'WiFi save failed', 'error');
+    });
+}
+
+/* Triggers the second half of the save flow: asks the backend to
+ * reload wpa_supplicant and poll until the association state machine
+ * reaches COMPLETED (or the server's 20 s budget runs out).
+ *
+ * Shown as two sequential toasts so the user can tell "applying" apart
+ * from the final outcome. Kept exported (window-global via function
+ * declaration) so the UI flow is testable without forcing a save. */
+function applyWifi() {
+    toast('Applying new WiFi settings — this can take up to 20 seconds');
+
+    apiCall('POST', '/api/network/wifi/connect').then(function(result) {
+        if (result && result.connected) {
+            var ssid = result.ssid || 'the network';
+            var ip = result.ip ? ' (' + result.ip + ')' : '';
+            toast('Connected to ' + ssid + ip);
+        } else {
+            /* Non-connected outcome: show the wpa_state so the user
+             * knows whether to retry (SCANNING / DISCONNECTED usually
+             * means wrong PSK or AP out of range), and remind them the
+             * config is persisted either way. */
+            var state = (result && result.state) ? result.state : 'unknown';
+            toast('Not yet connected (state: ' + state +
+                  '). The new config will apply on next boot.', 'error');
+        }
+    }).catch(function(err) {
+        /* Most common reason for this branch: the browser is on the
+         * WiFi the Pi just left, so the HTTP response never arrives.
+         * Reassure the user that the save itself still took. */
+        var msg = (err && err.message) ? err.message : 'connection test failed';
+        toast('Could not confirm connection (' + msg +
+              '). Config is saved and will apply on next boot.', 'error');
     });
 }
 
@@ -1249,6 +1571,11 @@ function changePassword() {
 document.addEventListener('DOMContentLoaded', function() {
     loadSystemInfo();
     checkForUpdates();
+    /* Wire dropzone listeners once — before loadApplets() populates
+     * cards — since the dropzone elements are static HTML and survive
+     * every subsequent loadApplets() rebuild. Card listeners are
+     * (re-)attached inside loadApplets() via wireAppletCards(). */
+    initAppletDropzones();
     loadApplets();
     loadHostname();
     loadWifi();

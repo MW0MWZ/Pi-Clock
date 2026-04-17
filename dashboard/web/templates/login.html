@@ -34,15 +34,25 @@
                 </div>
             </form>
 
-            <div class="footer" style="color:#a09888; border-top-color:#504a46">
-                <div class="footer-version" style="color:#a09888">Pi-Clock {{.Version}}</div>
-                <div class="footer-copyright">&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</div>
-                <div class="footer-love" style="margin-top:6px; opacity:0.7;">
+            <!-- Mirrors the footer on dashboard.html — same element,
+                 same line order, same classes — so the two pages feel
+                 like one app. Colours flow through the CSS custom
+                 properties; <html data-theme="dark"> above pins this
+                 page to the dark palette regardless of system theme. -->
+            <footer class="footer">
+                <div class="footer-love" style="margin-bottom:6px;">
                     Built with
                     <svg class="icon icon-heart" aria-label="love"><use href="/static/icons.svg#icon-heart"/></svg>
                     for the Amateur Radio community
                 </div>
-            </div>
+                <div class="footer-copyright">&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</div>
+                <div class="footer-links">
+                    <a href="https://github.com/MW0MWZ/Pi-Clock" target="_blank" rel="noopener">GitHub</a>
+                    <span class="footer-sep">&middot;</span>
+                    <a href="https://github.com/MW0MWZ/Pi-Clock/releases/latest" target="_blank" rel="noopener">Latest Release</a>
+                </div>
+                <div class="footer-version">Pi-Clock {{.Version}}</div>
+            </footer>
         </div>
     </div>
 </body>

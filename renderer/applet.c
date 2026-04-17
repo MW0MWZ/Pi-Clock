@@ -243,41 +243,121 @@ void pic_applet_stack_render(pic_applet_stack_t *stack, cairo_t *cr,
 
 #define APPLET_CONF "/data/etc/pi-clock-applets.conf"
 
+/*
+ * pic_applet_load_config - Apply saved settings and ordering.
+ *
+ * Reads /data/etc/pi-clock-applets.conf. Line format:
+ *   name=enabled,side    (e.g. dxfeed=1,right)
+ *
+ * Line order in the config file is treated as the render order: the
+ * first matching applet ends up at applets[0] (visual top within its
+ * side), the next at applets[1], and so on. The render loop walks
+ * the array from the highest index down and stacks each enabled
+ * applet upward from the bottom corner, so index 0 ends up at the
+ * visual top. See pic_applet_stack_render() for the layout maths.
+ *
+ * This is how the dashboard's drag-and-drop ordering reaches the
+ * display — it writes the config file with applets already in the
+ * intended visual order, then SIGHUPs the renderer, which re-runs
+ * this loader.
+ *
+ * Applets named in the config file are placed first (in file order);
+ * applets present in the stack but absent from the config file keep
+ * their original registration order at the tail. This keeps any
+ * newly-added applet (not yet known to the saved config) visible
+ * with its compiled-in defaults rather than silently disappearing.
+ */
 void pic_applet_load_config(pic_applet_stack_t *stack)
 {
     FILE *f;
     char line[128];
-    int i;
+    pic_applet_t reordered[MAX_APPLETS];
+    int          placed[MAX_APPLETS]; /* 1 if applets[i] already moved */
+    int          new_count = 0;
+    int          i;
 
     f = fopen(APPLET_CONF, "r");
     if (!f) return;
 
     printf("applet: loading settings from %s\n", APPLET_CONF);
 
-    while (fgets(line, sizeof(line), f)) {
+    memset(placed, 0, sizeof(placed));
+
+    /*
+     * Walk the config file in order. For each line, find the matching
+     * applet in the current stack, copy it into the next slot of the
+     * reordered buffer with the saved enabled/side values applied,
+     * and mark it placed. Lines referencing unknown applets are
+     * skipped — this lets older config files survive renames without
+     * breaking the loader.
+     */
+    while (fgets(line, sizeof(line), f) && new_count < MAX_APPLETS) {
         char name[32];
-        int enabled;
+        int  enabled;
         char side_str[16];
+        int  side;
+        int  found;
 
         if (line[0] == '#' || line[0] == '\n') continue;
 
-        /* Format: name=enabled,side  (e.g. dxfeed=1,right) */
-        if (sscanf(line, "%31[^=]=%d,%15s", name, &enabled, side_str) >= 2) {
-            for (i = 0; i < stack->count; i++) {
-                if (strcmp(stack->applets[i].name, name) == 0) {
-                    stack->applets[i].enabled = enabled;
-                    if (strcmp(side_str, "left") == 0) {
-                        stack->applets[i].side = APPLET_SIDE_LEFT;
-                    } else if (strcmp(side_str, "right") == 0) {
-                        stack->applets[i].side = APPLET_SIDE_RIGHT;
-                    }
-                    printf("applet: '%s' enabled=%d side=%s\n",
-                           name, enabled, side_str);
-                    break;
-                }
+        if (sscanf(line, "%31[^=]=%d,%15s", name, &enabled, side_str) < 2) {
+            continue;
+        }
+
+        /*
+         * Default to the applet's compiled-in side if the config
+         * has an unknown value (e.g. "disabled" from a future
+         * format revision). The enabled flag alone already
+         * controls visibility, so an unparsed side just keeps the
+         * render position stable.
+         */
+        side = -1;
+        if (strcmp(side_str, "left") == 0)  side = APPLET_SIDE_LEFT;
+        if (strcmp(side_str, "right") == 0) side = APPLET_SIDE_RIGHT;
+
+        found = -1;
+        for (i = 0; i < stack->count; i++) {
+            if (!placed[i] && strcmp(stack->applets[i].name, name) == 0) {
+                found = i;
+                break;
             }
         }
+        if (found < 0) continue;
+
+        reordered[new_count] = stack->applets[found];
+        reordered[new_count].enabled = enabled;
+        if (side >= 0) {
+            reordered[new_count].side = side;
+        }
+        placed[found] = 1;
+        new_count++;
+
+        printf("applet: '%s' enabled=%d side=%s (pos %d)\n",
+               name, enabled, side_str, new_count - 1);
     }
 
     fclose(f);
+
+    /*
+     * Append any applets the config didn't mention, preserving their
+     * original registration order. Falls through as a no-op if every
+     * applet was named in the file. This branch is what prevents a
+     * fresh install (no config yet) or a stale config (written before
+     * a new applet was added in code) from losing entries.
+     */
+    for (i = 0; i < stack->count && new_count < MAX_APPLETS; i++) {
+        if (!placed[i]) {
+            reordered[new_count++] = stack->applets[i];
+        }
+    }
+
+    /*
+     * Commit the reordered array back into the stack. We overwrite
+     * in place rather than swapping pointers because the stack
+     * struct owns the array storage by value. new_count == stack->count
+     * in the normal case; it can only shrink if somehow more than
+     * MAX_APPLETS entries appeared (which we capped above).
+     */
+    memcpy(stack->applets, reordered, sizeof(pic_applet_t) * new_count);
+    stack->count = new_count;
 }

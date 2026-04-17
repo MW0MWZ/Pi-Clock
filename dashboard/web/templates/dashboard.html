@@ -112,11 +112,31 @@
             </div>
         </div>
 
-        <!-- Applet Control -->
+        <!-- Applet Control.
+             Three drop zones: Left / Right / Disabled. Cards can be
+             dragged within a column to change the visual stacking
+             order (top of column = top of the on-screen panel) and
+             between columns to switch side or enable/disable. JS in
+             loadApplets()/saveApplets() renders and serialises them. -->
         <div class="card">
             <div class="card-title">Applets</div>
-            <div id="applet-controls">
-                <p class="text-muted">Loading applets...</p>
+            <p class="text-muted" style="margin: 0 0 10px">
+                Drag to reorder within a column, or between columns to change side.
+                Top of column = top of on-screen panel.
+            </p>
+            <div id="applet-controls" class="applet-board">
+                <div class="applet-column" data-applet-bucket="left">
+                    <div class="applet-column-title">Left panel</div>
+                    <div class="applet-dropzone" data-applet-dropzone="left"></div>
+                </div>
+                <div class="applet-column" data-applet-bucket="right">
+                    <div class="applet-column-title">Right panel</div>
+                    <div class="applet-dropzone" data-applet-dropzone="right"></div>
+                </div>
+                <div class="applet-column" data-applet-bucket="disabled">
+                    <div class="applet-column-title">Disabled</div>
+                    <div class="applet-dropzone" data-applet-dropzone="disabled"></div>
+                </div>
             </div>
             <div class="mt-12">
                 <button class="btn btn-primary btn-sm" onclick="saveApplets()">Save Panels</button>
@@ -258,15 +278,62 @@
                 <div class="card-title mt-12">WiFi</div>
                 <div class="form-group">
                     <label for="wifi_ssid">Network Name (SSID)</label>
-                    <input type="text" id="wifi_ssid" class="form-control" placeholder="MyNetwork">
+                    <input type="text" id="wifi_ssid" class="form-control" placeholder="MyNetwork" maxlength="32">
+                </div>
+                <!-- Inline checkbox label — deliberately not wrapped in
+                     .form-group so the global `.form-group label` rule
+                     (block display, small font) doesn't stack the
+                     checkbox above its caption. -->
+                <div class="mt-8" style="margin-bottom:12px">
+                    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:14px">
+                        <input type="checkbox" id="wifi_open" onchange="onWifiOpenToggle()">
+                        Open network (no password)
+                    </label>
                 </div>
                 <div class="form-group">
                     <label for="wifi_password">Password</label>
-                    <input type="password" id="wifi_password" class="form-control" placeholder="Leave blank to keep current">
+                    <input type="password" id="wifi_password" class="form-control" placeholder="Leave blank to keep current" minlength="8" maxlength="63">
                 </div>
                 <div class="form-group">
-                    <label for="wifi_country">Country Code</label>
-                    <input type="text" id="wifi_country" class="form-control" maxlength="2" placeholder="GB">
+                    <label for="wifi_country">WiFi Country</label>
+                    <!-- Kept in sync with the country list in the gh-pages
+                         config-generator (regulatory domains we've tested).
+                         Any update should be mirrored in both places. -->
+                    <select id="wifi_country" class="form-control">
+                        <option value="AT">Austria (AT)</option>
+                        <option value="AU">Australia (AU)</option>
+                        <option value="BE">Belgium (BE)</option>
+                        <option value="BR">Brazil (BR)</option>
+                        <option value="CA">Canada (CA)</option>
+                        <option value="CH">Switzerland (CH)</option>
+                        <option value="CZ">Czech Republic (CZ)</option>
+                        <option value="DE">Germany (DE)</option>
+                        <option value="DK">Denmark (DK)</option>
+                        <option value="ES">Spain (ES)</option>
+                        <option value="FI">Finland (FI)</option>
+                        <option value="FR">France (FR)</option>
+                        <option value="GB" selected>United Kingdom (GB)</option>
+                        <option value="GR">Greece (GR)</option>
+                        <option value="HU">Hungary (HU)</option>
+                        <option value="IE">Ireland (IE)</option>
+                        <option value="IL">Israel (IL)</option>
+                        <option value="IN">India (IN)</option>
+                        <option value="IT">Italy (IT)</option>
+                        <option value="JP">Japan (JP)</option>
+                        <option value="KR">South Korea (KR)</option>
+                        <option value="MX">Mexico (MX)</option>
+                        <option value="NL">Netherlands (NL)</option>
+                        <option value="NO">Norway (NO)</option>
+                        <option value="NZ">New Zealand (NZ)</option>
+                        <option value="PL">Poland (PL)</option>
+                        <option value="PT">Portugal (PT)</option>
+                        <option value="RO">Romania (RO)</option>
+                        <option value="RU">Russia (RU)</option>
+                        <option value="SE">Sweden (SE)</option>
+                        <option value="SG">Singapore (SG)</option>
+                        <option value="US">United States (US)</option>
+                        <option value="ZA">South Africa (ZA)</option>
+                    </select>
                 </div>
                 <div class="mt-12">
                     <button class="btn btn-primary btn-sm" onclick="saveWifi()">Save WiFi</button>

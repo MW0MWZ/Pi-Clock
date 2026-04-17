@@ -12,6 +12,9 @@ package api
 
 import (
 	"bufio"
+	"crypto/pbkdf2"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -36,6 +39,11 @@ import (
 )
 
 const userConfPath = "/data/etc/pi-clock-user.conf"
+
+// wpaSupplicantConfPath is the live wpa_supplicant configuration. On
+// Pi-Clock OS the parent directory is bind-mounted from /data/etc, so
+// writes here persist across A/B root-slot upgrades.
+const wpaSupplicantConfPath = "/etc/wpa_supplicant/wpa_supplicant.conf"
 
 // IsPiClockOS returns true if running on Pi-Clock OS (not a dev machine).
 func IsPiClockOS() bool {
@@ -937,43 +945,135 @@ func PutHostname(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "hostname changed"})
 }
 
-// GetWifi returns current WiFi SSID and country code.
-// Does not return the PSK for security reasons.
+// GetWifi returns the current WiFi SSID, country code, and whether the
+// configured network is open (unsecured). The PSK is deliberately not
+// returned — the dashboard only needs it to decide whether to pre-tick
+// the "Open network" box and whether it can let the user save without
+// re-entering a password.
 func GetWifi(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile("/etc/wpa_supplicant/wpa_supplicant.conf")
+	resp := map[string]interface{}{
+		"ssid": "", "country": "", "open_network": false,
+	}
+	data, err := os.ReadFile(wpaSupplicantConfPath)
 	if err != nil {
-		jsonResponse(w, http.StatusOK, map[string]string{
-			"ssid": "", "country": "",
-		})
+		jsonResponse(w, http.StatusOK, resp)
 		return
 	}
 
-	ssid := ""
-	country := ""
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "ssid=") {
-			ssid = strings.Trim(line[5:], "\"")
-		}
-		if strings.HasPrefix(line, "country=") {
-			country = line[8:]
+	var (
+		ssid, country string
+		inNet         bool
+		keyMgmtNone   bool
+	)
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(raw)
+		switch {
+		case !inNet && strings.HasPrefix(line, "country="):
+			country = line[len("country="):]
+		case !inNet && line == "network={":
+			inNet = true
+		case inNet && line == "}":
+			inNet = false
+		case inNet && strings.HasPrefix(line, "ssid="):
+			/* Strip the surrounding double quotes that wpa_supplicant
+			 * requires around string-form SSIDs. Non-ASCII SSIDs can
+			 * also appear unquoted as hex; those are rare in the
+			 * dashboard flow (we always write quoted form) so we
+			 * don't attempt to decode them here. */
+			ssid = strings.Trim(line[len("ssid="):], "\"")
+		case inNet && line == "key_mgmt=NONE":
+			keyMgmtNone = true
 		}
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]string{
-		"ssid": ssid, "country": country,
-	})
+	resp["ssid"] = ssid
+	resp["country"] = country
+	resp["open_network"] = keyMgmtNone
+	jsonResponse(w, http.StatusOK, resp)
 }
 
-// PutWifi updates WiFi SSID and password.
-// Generates a hashed PSK via wpa_passphrase and writes a new
-// wpa_supplicant.conf. Reconfigures the running wpa_supplicant
-// via wpa_cli so changes take effect without reboot.
+// currentWifiAuthBlock returns the indented auth lines of the existing
+// network{} block whose ssid matches targetSSID, as they appear in
+// wpa_supplicant.conf between the `ssid=` line and the `priority=`
+// line (exclusive at both ends). Typical contents:
+//
+//	"\t#psk=\"plaintext\"\n\tpsk=<hex hash>"   (wpa_passphrase-formatted secured network)
+//	"\tkey_mgmt=NONE"                          (open network)
+//
+// Used by PutWifi so the user can re-save the same SSID (e.g. to change
+// the country code) without re-typing their passphrase — we reuse every
+// captured line, preserving both the #psk="..." plaintext comment and
+// the hashed psk= line that pi-clock-config / wpa_passphrase write.
+// Returns ok=false if the target SSID is not present, in which case the
+// caller must refuse the save rather than silently create an open
+// network.
+func currentWifiAuthBlock(confPath, targetSSID string) (block string, ok bool) {
+	data, err := os.ReadFile(confPath)
+	if err != nil {
+		return "", false
+	}
+	var (
+		inNet     bool
+		blockSSID string
+		lines     []string
+		capturing bool
+	)
+	for _, raw := range strings.Split(string(data), "\n") {
+		t := strings.TrimSpace(raw)
+		switch {
+		case !inNet && t == "network={":
+			inNet = true
+			blockSSID = ""
+			lines = lines[:0]
+			capturing = false
+		case inNet && t == "}":
+			inNet = false
+			if blockSSID == targetSSID && len(lines) > 0 {
+				return strings.Join(lines, "\n"), true
+			}
+		case inNet && strings.HasPrefix(t, "ssid="):
+			blockSSID = strings.Trim(t[len("ssid="):], "\"")
+			capturing = true
+		case inNet && strings.HasPrefix(t, "priority="):
+			/* priority is rewritten by PutWifi, so stop capturing
+			 * here and drop whatever followed it. */
+			capturing = false
+		case inNet && capturing && t != "":
+			/* Re-emit with a leading tab so the output stays
+			 * consistent regardless of the source file's
+			 * indentation style. */
+			lines = append(lines, "\t"+t)
+		}
+	}
+	return "", false
+}
+
+// PutWifi updates the WiFi SSID, password, and country.
+//
+// Three modes, resolved from the request body:
+//
+//   1. open_network=true:      write key_mgmt=NONE (unsecured network).
+//   2. password non-empty:     derive the PSK via PBKDF2-HMAC-SHA1 per
+//                              IEEE 802.11i / RFC 8018 — the same hash
+//                              `wpa_passphrase(8)` would produce.
+//   3. password empty:         reuse the existing auth line from
+//                              wpa_supplicant.conf, but only if the
+//                              requested SSID matches the one already
+//                              stored. Otherwise reject — we have no
+//                              credentials to fall back on and silently
+//                              dropping the network to open would be a
+//                              data-loss footgun.
+//
+// PBKDF2 is computed in-process rather than by shelling out to
+// `wpa_passphrase`. That removes a whole class of failure modes (PATH,
+// exec permissions, version quirks, stdin buffering) and keeps the
+// plaintext passphrase out of any child process address space.
 func PutWifi(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SSID     string `json:"ssid"`
-		Password string `json:"password"`
-		Country  string `json:"country"`
+		SSID        string `json:"ssid"`
+		Password    string `json:"password"`
+		Country     string `json:"country"`
+		OpenNetwork bool   `json:"open_network"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
@@ -984,11 +1084,14 @@ func PutWifi(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "SSID is required"})
 		return
 	}
-	/* Reject characters that could break the config file format:
-	 * - newlines: inject extra directives
-	 * - double-quote: break out of ssid="..." quoting
-	 * - backslash: wpa_supplicant interprets \n, \t, etc. in quoted strings
-	 * - null byte: silently truncated by wpa_passphrase */
+	/* Reject characters that could break the config file format or
+	 * escape out of the ssid="..." quoting:
+	 *   newline/CR    — inject extra wpa_supplicant directives
+	 *   double-quote  — terminate the quoted SSID early
+	 *   backslash     — wpa_supplicant interprets \n, \t, etc. inside
+	 *                   quoted strings
+	 *   null byte     — silently truncates strings in C-based tooling
+	 * Applied to every field we embed in the generated config. */
 	for _, v := range []string{req.SSID, req.Password, req.Country} {
 		if strings.ContainsAny(v, "\n\r\"\\\x00") {
 			jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid characters"})
@@ -1003,13 +1106,10 @@ func PutWifi(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "SSID too long (max 32)"})
 		return
 	}
-	/* WPA2 requires 8-63 character passphrase */
-	if req.Password != "" && (len(req.Password) < 8 || len(req.Password) > 63) {
-		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "WiFi password must be 8-63 characters"})
-		return
-	}
 
-	/* Country code must be exactly 2 uppercase letters */
+	/* Country code must be exactly 2 uppercase ASCII letters — wpa_supplicant
+	 * and the kernel regdb both require this form. Default to GB if the
+	 * client omitted the field entirely. */
 	if req.Country == "" {
 		req.Country = "GB"
 	}
@@ -1019,34 +1119,75 @@ func PutWifi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/* Generate hashed PSK using wpa_passphrase.
-	 * Password is passed via stdin to avoid exposing it in
-	 * /proc/PID/cmdline (visible to all local processes). */
-	var pskLine string
-	if req.Password == "" {
-		pskLine = "\tkey_mgmt=NONE"
-	} else {
-		cmd := exec.Command("wpa_passphrase", req.SSID)
-		cmd.Stdin = strings.NewReader(req.Password + "\n")
-		out, err := cmd.Output()
+	/* Resolve the auth block for the network{} section. The three
+	 * modes are intentionally mutually exclusive: OpenNetwork wins
+	 * over Password if a client somehow sends both, so a deliberate
+	 * user tick can't be overridden by a stale value in the password
+	 * field. The block is a multi-line chunk (already tab-indented)
+	 * that will be spliced into the network{} between ssid= and
+	 * priority= — matching the format wpa_passphrase / pi-clock-config
+	 * produce, so every writer of this file emits byte-compatible
+	 * output. */
+	var authBlock string
+	switch {
+	case req.OpenNetwork:
+		authBlock = "\tkey_mgmt=NONE"
+
+	case req.Password != "":
+		/* WPA2 passphrase length is fixed by the spec at 8..63 printable
+		 * ASCII characters. Enforce here so we don't feed an out-of-spec
+		 * input into PBKDF2 and then fail to associate with the AP. */
+		if len(req.Password) < 8 || len(req.Password) > 63 {
+			jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "WiFi password must be 8-63 characters"})
+			return
+		}
+		/* PSK = PBKDF2-HMAC-SHA1(passphrase, ssid, 4096, 32 bytes).
+		 * Defined in IEEE 802.11i §8.4.1.1 and RFC 8018; matches
+		 * `wpa_passphrase(8)` byte-for-byte. */
+		hash, err := pbkdf2.Key(sha1.New, req.Password, []byte(req.SSID), 4096, 32)
 		if err != nil {
-			log.Printf("wpa_passphrase: %v", err)
-			jsonResponse(w, http.StatusInternalServerError, map[string]string{
-				"error": "failed to generate WiFi credentials",
+			internalError(w, "derive wifi psk", err)
+			return
+		}
+		/* Emit wpa_passphrase's exact two-line format:
+		 *   #psk="plaintext"     (ignored by wpa_supplicant, kept as a
+		 *                         debugging aid — matches what the
+		 *                         boot-time pi-clock-config script
+		 *                         writes, so the file looks identical
+		 *                         whichever path set it up)
+		 *   psk=<hex hash>
+		 * Security note: this leaves the plaintext passphrase inside
+		 * wpa_supplicant.conf. The file is mode 0600 and owned by root;
+		 * only root-equivalent access can read it. This is a
+		 * deliberate consistency-over-secrecy tradeoff — pi-clock-config
+		 * already does the same, and the Pi's threat model treats
+		 * filesystem root as fully trusted. The earlier validation
+		 * rejected \ and " so the password can be embedded verbatim. */
+		authBlock = fmt.Sprintf("\t#psk=\"%s\"\n\tpsk=%s",
+			req.Password, hex.EncodeToString(hash))
+
+	default:
+		/* Blank password, not an open network. Only legal if the user
+		 * is re-saving the same SSID — then we preserve whatever auth
+		 * block was already stored (the #psk/psk pair, or key_mgmt=NONE).
+		 * Rejects the SSID-change case so we never silently discard
+		 * the user's credentials. */
+		block, ok := currentWifiAuthBlock(wpaSupplicantConfPath, req.SSID)
+		if !ok {
+			jsonResponse(w, http.StatusBadRequest, map[string]string{
+				"error": `Password required (enter the WiFi password, or tick "Open network" for an unsecured network)`,
 			})
 			return
 		}
-		/* Extract the hashed psk= line (not the #psk= comment) */
-		for _, line := range strings.Split(string(out), "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "psk=") && !strings.HasPrefix(line, "#") {
-				pskLine = "\t" + line
-				break
-			}
-		}
+		authBlock = block
 	}
 
-	/* Build the config file */
+	/* Assemble the new wpa_supplicant.conf. The header, tab indents,
+	 * quoted-SSID form, and trailing priority=1 exactly mirror what
+	 * the on-device pi-clock-config script writes when processing the
+	 * boot-partition config file — any tool or admin reading the file
+	 * sees a single consistent format regardless of whether the
+	 * dashboard or the boot processor last touched it. */
 	conf := fmt.Sprintf(`ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=0
 update_config=1
@@ -1056,20 +1197,105 @@ network={
 %s
 	priority=1
 }
-`, req.Country, req.SSID, pskLine)
+`, req.Country, req.SSID, authBlock)
 
-	if err := os.WriteFile("/etc/wpa_supplicant/wpa_supplicant.conf", []byte(conf), 0600); err != nil {
+	/* atomicWriteFile writes via tmp + rename so a power loss mid-save
+	 * leaves the previous config intact rather than truncating it. */
+	if err := atomicWriteFile(wpaSupplicantConfPath, []byte(conf), 0600); err != nil {
 		internalError(w, "save wifi", err)
 		return
 	}
 
-	/* Tell the running wpa_supplicant to reload config */
+	/* Deliberately do NOT reconfigure wpa_supplicant here. The client
+	 * calls POST /api/network/wifi/connect a few seconds later so the
+	 * UI can show the "saved" state before we bring the radio down
+	 * and back up — the re-association can take 10-20 seconds on a
+	 * slow AP and the user's browser session may be on the very WiFi
+	 * we're about to disconnect. */
+
+	log.Printf("wifi: SSID changed to %q (open=%v)", req.SSID, req.OpenNetwork)
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "saved"})
+}
+
+// parseWpaStatus extracts the fields from `wpa_cli status` output that
+// we report to the dashboard: wpa_state (the association state machine
+// position), ssid (the network name once associated), and ip_address
+// (once DHCP has completed). Missing fields are returned as "".
+func parseWpaStatus(out []byte) (state, ssid, ip string) {
+	for _, line := range strings.Split(string(out), "\n") {
+		switch {
+		case strings.HasPrefix(line, "wpa_state="):
+			state = line[len("wpa_state="):]
+		case strings.HasPrefix(line, "ssid="):
+			ssid = line[len("ssid="):]
+		case strings.HasPrefix(line, "ip_address="):
+			ip = line[len("ip_address="):]
+		}
+	}
+	return
+}
+
+// PostWifiConnect asks wpa_supplicant to reload the configuration
+// written by PutWifi, then polls its status machine until association
+// completes or the timeout fires.
+//
+// Split from PutWifi so the dashboard can show the saved-config state
+// before the radio disconnects — the association step can take tens of
+// seconds on a slow AP, and if the user is editing over the same WiFi
+// they're switching networks on, their browser will miss the response
+// anyway. The config is already on disk before this runs; a failing
+// connect just means the user has to reboot or fix the AP.
+func PostWifiConnect(w http.ResponseWriter, r *http.Request) {
 	if err := exec.Command("wpa_cli", "-i", "wlan0", "reconfigure").Run(); err != nil {
-		log.Printf("wifi: wpa_cli reconfigure: %v (will apply on next restart)", err)
+		log.Printf("wifi: wpa_cli reconfigure: %v", err)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"connected": false,
+			"state":     "RECONFIGURE_FAILED",
+			"error":     "Could not signal wpa_supplicant — config saved, will apply on next boot",
+		})
+		return
 	}
 
-	log.Printf("wifi: SSID changed to %q", req.SSID)
-	jsonResponse(w, http.StatusOK, map[string]string{"status": "saved"})
+	/* Poll at 500 ms up to 20 s. wpa_supplicant walks through:
+	 *   DISCONNECTED → SCANNING → ASSOCIATING → ASSOCIATED →
+	 *   4WAY_HANDSHAKE → GROUP_HANDSHAKE → COMPLETED
+	 * We treat COMPLETED (+ optional ip_address) as success; any
+	 * other terminal state on timeout is "still trying". Polling is
+	 * simpler and more portable than subscribing to the wpa_cli
+	 * event socket, and 500 ms keeps the worst-case UI latency
+	 * under a second once the radio has associated. */
+	deadline := time.Now().Add(20 * time.Second)
+	var (
+		state, ssid, ip string
+		connected       bool
+	)
+	for time.Now().Before(deadline) {
+		out, err := exec.Command("wpa_cli", "-i", "wlan0", "status").Output()
+		if err == nil {
+			state, ssid, ip = parseWpaStatus(out)
+			if state == "COMPLETED" {
+				connected = true
+				/* Give DHCP a short grace period to populate
+				 * ip_address so the UI can show it in the
+				 * success message. A successful association
+				 * without an IP yet is still reported as
+				 * connected — the user can refresh later. */
+				if ip != "" {
+					break
+				}
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	log.Printf("wifi: connect result state=%s ssid=%q ip=%s connected=%v",
+		state, ssid, ip, connected)
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"connected": connected,
+		"state":     state,
+		"ssid":      ssid,
+		"ip":        ip,
+	})
 }
 
 // PostChangePassword changes the pi-clock user's password.
@@ -1174,26 +1400,65 @@ var appletDefs = []struct {
 
 const appletsConfPath = "/data/etc/pi-clock-applets.conf"
 
-// GetApplets returns current applet settings, merged with defaults.
+// GetApplets returns the current applet settings merged with compiled-in
+// defaults, in the order the user has arranged them.
+//
+// Ordering contract: the line order in pi-clock-applets.conf is the
+// visual stacking order (first-in-file = top-of-panel within its side,
+// see pic_applet_load_config() in the renderer). The dashboard's
+// drag-and-drop UI sends applets in the intended visual order, and
+// this handler returns them in that same order so a page refresh
+// always shows the last-saved arrangement.
+//
+// Any applet defined in appletDefs but not present in the saved file
+// (a fresh install, or a newly-added applet the user hasn't dragged
+// yet) is appended to the tail with its compiled-in defaults. This
+// keeps new applets discoverable rather than quietly missing.
 func GetApplets() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		saved := readAppletsConf()
+		savedOrder, savedByName := readAppletsConf()
 
-		var applets []map[string]interface{}
-		for _, def := range appletDefs {
-			enabled := def.Default
-			side := def.Side
+		/* Label/default lookup keyed by applet name. A name we
+		 * don't recognise (e.g. a config line left over from a
+		 * removed applet) is skipped entirely — better to drop it
+		 * than to round-trip unknown entries the UI can't render. */
+		defByName := make(map[string]int, len(appletDefs))
+		for i := range appletDefs {
+			defByName[appletDefs[i].Name] = i
+		}
 
-			if s, ok := saved[def.Name]; ok {
-				enabled = s.enabled
-				side = s.side
+		applets := make([]map[string]interface{}, 0, len(appletDefs))
+		emitted := make(map[string]bool, len(appletDefs))
+
+		/* First: walk the saved file in its own order. */
+		for _, name := range savedOrder {
+			di, ok := defByName[name]
+			if !ok {
+				continue
 			}
+			s := savedByName[name]
+			applets = append(applets, map[string]interface{}{
+				"name":    appletDefs[di].Name,
+				"label":   appletDefs[di].Label,
+				"enabled": s.enabled,
+				"side":    s.side,
+			})
+			emitted[name] = true
+		}
 
+		/* Then: append any applet we know about that the saved
+		 * file didn't mention, in the compiled-in declaration
+		 * order. New applets land at the end of their side's
+		 * visual stack — least surprising. */
+		for _, def := range appletDefs {
+			if emitted[def.Name] {
+				continue
+			}
 			applets = append(applets, map[string]interface{}{
 				"name":    def.Name,
 				"label":   def.Label,
-				"enabled": enabled,
-				"side":    side,
+				"enabled": def.Default,
+				"side":    def.Side,
 			})
 		}
 
@@ -1201,7 +1466,13 @@ func GetApplets() http.HandlerFunc {
 	}
 }
 
-// PutApplets saves applet settings and signals the renderer.
+// PutApplets writes the applet configuration in the exact order the
+// request body specifies. That line order is the render stacking order
+// — see GetApplets / pic_applet_load_config for the contract.
+//
+// Unknown applet names are silently dropped (validName guard) so a
+// malicious or malformed request can't inject arbitrary keys into the
+// config file.
 func PutApplets() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var applets []struct {
@@ -1217,11 +1488,22 @@ func PutApplets() http.HandlerFunc {
 			return
 		}
 
-		var lines []string
-		lines = append(lines, "# Pi-Clock applet configuration")
-		lines = append(lines, "# Managed by the dashboard")
+		/* Guard against two request bugs by dropping anything
+		 * we don't recognise from appletDefs — a client that
+		 * sends a renamed or fabricated name shouldn't be able
+		 * to create config entries the renderer can't consume. */
+		known := make(map[string]bool, len(appletDefs))
+		for _, d := range appletDefs {
+			known[d.Name] = true
+		}
+
+		lines := []string{
+			"# Pi-Clock applet configuration",
+			"# Managed by the dashboard.",
+			"# Line order = visual stacking order within each side.",
+		}
 		for _, a := range applets {
-			if !validName.MatchString(a.Name) {
+			if !validName.MatchString(a.Name) || !known[a.Name] {
 				continue
 			}
 			e := "0"
@@ -1230,6 +1512,10 @@ func PutApplets() http.HandlerFunc {
 			}
 			side := a.Side
 			if side != "left" && side != "right" {
+				/* Disabled applets still carry a side in the
+				 * file so the renderer has a stable answer for
+				 * "which column would this land in if re-enabled".
+				 * Default to right for historical compatibility. */
 				side = "right"
 			}
 			lines = append(lines, fmt.Sprintf("%s=%s,%s", a.Name, e, side))
@@ -1254,12 +1540,16 @@ type appletSetting struct {
 	side    string
 }
 
-func readAppletsConf() map[string]appletSetting {
-	result := make(map[string]appletSetting)
+// readAppletsConf parses the saved applet config and returns the
+// names in file-order plus a lookup map of settings. Callers that
+// care about order walk the slice; callers that only need values
+// use the map.
+func readAppletsConf() (order []string, byName map[string]appletSetting) {
+	byName = make(map[string]appletSetting)
 
 	data, err := os.ReadFile(appletsConfPath)
 	if err != nil {
-		return result
+		return nil, byName
 	}
 
 	for _, line := range strings.Split(string(data), "\n") {
@@ -1285,10 +1575,17 @@ func readAppletsConf() map[string]appletSetting {
 			side = strings.TrimSpace(vals[1])
 		}
 
-		result[name] = appletSetting{enabled: enabled, side: side}
+		/* Skip duplicates of the same applet (malformed file)
+		 * so the first occurrence wins — keeps the order slice
+		 * in sync with the map and avoids double-rendering. */
+		if _, dup := byName[name]; dup {
+			continue
+		}
+		order = append(order, name)
+		byName[name] = appletSetting{enabled: enabled, side: side}
 	}
 
-	return result
+	return order, byName
 }
 
 // GetDxSettings returns current DX cluster filter settings from the config file.

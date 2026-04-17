@@ -591,6 +591,109 @@ select.form-control {
 .info-table td:first-child { color: var(--text-secondary); }
 .info-table td:last-child { text-align: right; }
 
+/* ── Applet drag-and-drop board ───────────────────────────────
+ * Three drop zones laid out side-by-side on wide viewports, stacked
+ * vertically on narrow ones. Each `.applet-dropzone` is a flex column
+ * whose children (`.applet-card`) are draggable. The dropzone has a
+ * minimum height so it remains a visible drop target when empty.
+ * ----------------------------------------------------------------- */
+.applet-board {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+@media (max-width: 640px) {
+    .applet-board { grid-template-columns: 1fr; }
+}
+
+.applet-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.applet-column-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.applet-dropzone {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 72px;
+    padding: 6px;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    background: var(--bg-input, transparent);
+    transition: background 0.15s, border-color 0.15s;
+}
+
+/* Highlight while a card is being dragged over the zone so the
+ * user can tell which column will accept the drop. */
+.applet-dropzone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-ring);
+}
+
+.applet-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: grab;
+    user-select: none;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.applet-card:hover { border-color: var(--text-secondary); }
+
+/* While being dragged by the browser. The card's ghost is already
+ * shown by the DnD implementation; we just fade the source so the
+ * origin position is obvious. */
+.applet-card.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+/* Drop-position indicator. A single reusable element is moved into
+ * the current drop target during dragover so the user sees exactly
+ * which slot the card will land in. pointer-events:none so it can't
+ * steal hover/drop events from the surrounding dropzone. */
+.applet-drop-indicator {
+    height: 3px;
+    margin: 0;
+    background: var(--accent);
+    border-radius: 2px;
+    pointer-events: none;
+    box-shadow: 0 0 6px var(--accent-ring);
+}
+
+/* Grip glyph — three horizontal rules drawn with CSS so we don't
+ * pull in another icon. Purely decorative; the whole card is the
+ * drag handle. */
+.applet-card-grip {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background-image: linear-gradient(
+        var(--text-muted) 2px, transparent 2px, transparent 4px,
+        var(--text-muted) 4px, var(--text-muted) 6px,
+        transparent 6px, transparent 8px,
+        var(--text-muted) 8px, var(--text-muted) 10px);
+    opacity: 0.7;
+    flex: 0 0 auto;
+}
+
 /* ── Section spacing ──────────────────────────────────────── */
 .dashboard-content {
     padding: 20px 0;

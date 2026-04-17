@@ -132,6 +132,11 @@ func main() {
 		// Network
 		r.Get("/network/wifi", api.GetWifi)
 		r.Put("/network/wifi", api.PutWifi)
+		/* POST /network/wifi/connect is the second half of the save
+		 * flow — it re-associates wpa_supplicant with the config that
+		 * PutWifi just wrote. Split from PutWifi so the dashboard can
+		 * show a "saved" toast before the radio actually flips. */
+		r.Post("/network/wifi/connect", api.PostWifiConnect)
 
 		// System settings
 		r.Get("/system/hostname", api.GetHostname)
