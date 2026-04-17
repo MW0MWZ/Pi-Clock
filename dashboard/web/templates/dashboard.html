@@ -17,14 +17,25 @@
             </div>
             <div class="navbar-right">
                 <a href="https://pi-clock.pistar.uk/manual/" class="btn btn-outline btn-sm"
-                   title="Pi-Clock manual" target="_blank">&#128214; Manual</a>
+                   title="Pi-Clock manual" target="_blank" rel="noopener">
+                    <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-book-open"/></svg>
+                    Manual
+                </a>
                 <a href="/api/system/screenshot" class="btn btn-outline btn-sm"
-                   title="Download a screenshot of the HDMI display output">&#128247; Screenshot</a>
+                   title="Download a screenshot of the HDMI display output">
+                    <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-camera"/></svg>
+                    Screenshot
+                </a>
                 <button id="theme-toggle" class="btn btn-outline btn-sm"
-                        title="Toggle light/dark theme">&#9790; Dark Mode</button>
+                        title="Toggle light/dark theme" aria-label="Toggle light/dark theme">
+                    <svg class="icon" aria-hidden="true"><use id="theme-icon-use" href="/static/icons.svg#icon-moon"/></svg>
+                    <span id="theme-label">Dark Mode</span>
+                </button>
                 <form method="POST" action="/logout" style="display:inline">
-                    <button type="submit" class="btn btn-outline btn-sm"
-                            title="Sign out">&#128274; Logout</button>
+                    <button type="submit" class="btn btn-outline btn-sm" title="Sign out">
+                        <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-log-out"/></svg>
+                        Logout
+                    </button>
                 </form>
             </div>
         </div>
@@ -114,7 +125,7 @@
 
         <!-- Propagation Settings (matches layer order: bandconditions before dxspots) -->
         <div class="card" id="propagation-card" style="display:none">
-            <div class="card-title card-title-row">Propagation Prediction <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="card-title card-title-row">Propagation Prediction <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers" aria-label="Back to layers"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-chevron-up"/></svg></button></div>
             <div class="form-group">
                 <label>Bands</label>
                 <div id="prop-band-toggles" class="actions-row mt-8"></div>
@@ -130,7 +141,7 @@
 
         <!-- DX Cluster Settings -->
         <div class="card" id="dx-cluster-card" style="display:none">
-            <div class="card-title card-title-row">DX Cluster <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="card-title card-title-row">DX Cluster <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers" aria-label="Back to layers"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-chevron-up"/></svg></button></div>
             <div class="grid-2">
                 <div class="form-group">
                     <label for="dx_distance">Spot Distance</label>
@@ -165,7 +176,7 @@
 
         <!-- Satellite Selection (hidden when satellite layer is off) -->
         <div class="card" id="satellite-select-card" style="display:none">
-            <div class="card-title card-title-row">Satellite Selection <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="card-title card-title-row">Satellite Selection <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers" aria-label="Back to layers"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-chevron-up"/></svg></button></div>
             <div id="satellite-controls">
                 <p class="text-muted">Loading satellites...</p>
             </div>
@@ -176,7 +187,7 @@
 
         <!-- Lightning Settings (hidden when lightning layer is off) -->
         <div class="card" id="lightning-card" style="display:none">
-            <div class="card-title card-title-row">Lightning Strikes <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="card-title card-title-row">Lightning Strikes <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers" aria-label="Back to layers"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-chevron-up"/></svg></button></div>
             <p class="text-muted mb-8">Real-time lightning data from Blitzortung.org community network.</p>
             <div class="form-group">
                 <label for="lightning_fade_ms">Fade Time</label>
@@ -195,7 +206,7 @@
 
         <!-- Earthquake Settings (hidden when earthquake layer is off) -->
         <div class="card" id="earthquake-card" style="display:none">
-            <div class="card-title card-title-row">Earthquakes <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="card-title card-title-row">Earthquakes <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers" aria-label="Back to layers"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-chevron-up"/></svg></button></div>
             <p class="text-muted mb-8">Significant earthquakes (M4.5+) from USGS Earthquake Hazards Program.</p>
             <div class="form-group">
                 <label for="earthquake_display_s">Display Time</label>
@@ -216,7 +227,7 @@
 
         <!-- Ticker Sources (hidden when ticker layer is off) -->
         <div class="card" id="ticker-sources-card" style="display:none">
-            <div class="card-title card-title-row">News Ticker <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers">&#9650;</button></div>
+            <div class="card-title card-title-row">News Ticker <button class="card-back-btn" onclick="scrollToLayers()" title="Back to Layers" aria-label="Back to layers"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-chevron-up"/></svg></button></div>
             <div class="form-group">
                 <label for="ticker_mode">Display Mode</label>
                 <select id="ticker_mode" class="form-control">
@@ -344,20 +355,33 @@
                 <img src="/static/logo.png" alt="Pi-Clock" class="overlay-logo">
                 <div id="overlay-spinner" class="spinner"></div>
                 <p id="system-overlay-msg">Processing...</p>
+                {{/*
+                  Each upgrade step contains all four state icons; CSS
+                  shows the one matching the parent's state class
+                  (pending/active/done/error). The template directive
+                  avoids repeating the four-SVG block seven times — see
+                  the "upgrade-step-icons" definition at the end of this
+                  file. (Go-template comment, not HTML, so the template
+                  parser doesn't trip on the braces below.)
+                */}}
                 <div id="upgrade-steps" style="display:none">
-                    <div class="upgrade-step" data-step="manifest"><span class="step-icon"></span>Checking for updates</div>
-                    <div class="upgrade-step" data-step="download"><span class="step-icon"></span>Downloading OS image</div>
-                    <div class="upgrade-step" data-step="verify"><span class="step-icon"></span>Verifying checksum</div>
-                    <div class="upgrade-step" data-step="format"><span class="step-icon"></span>Preparing partition</div>
-                    <div class="upgrade-step" data-step="extract"><span class="step-icon"></span>Installing update</div>
-                    <div class="upgrade-step" data-step="boot"><span class="step-icon"></span>Updating boot files</div>
-                    <div class="upgrade-step" data-step="config"><span class="step-icon"></span>Finalising</div>
+                    <div class="upgrade-step" data-step="manifest"><span class="step-icon">{{template "upgrade-step-icons"}}</span>Checking for updates</div>
+                    <div class="upgrade-step" data-step="download"><span class="step-icon">{{template "upgrade-step-icons"}}</span>Downloading OS image</div>
+                    <div class="upgrade-step" data-step="verify"><span class="step-icon">{{template "upgrade-step-icons"}}</span>Verifying checksum</div>
+                    <div class="upgrade-step" data-step="format"><span class="step-icon">{{template "upgrade-step-icons"}}</span>Preparing partition</div>
+                    <div class="upgrade-step" data-step="extract"><span class="step-icon">{{template "upgrade-step-icons"}}</span>Installing update</div>
+                    <div class="upgrade-step" data-step="boot"><span class="step-icon">{{template "upgrade-step-icons"}}</span>Updating boot files</div>
+                    <div class="upgrade-step" data-step="config"><span class="step-icon">{{template "upgrade-step-icons"}}</span>Finalising</div>
                 </div>
             </div>
         </div>
 
         <footer class="footer">
-            <div style="margin-bottom:6px;">Built with &#10084;&#65039; for the Amateur Radio community</div>
+            <div class="footer-love" style="margin-bottom:6px;">
+                Built with
+                <svg class="icon icon-heart" aria-label="love"><use href="/static/icons.svg#icon-heart"/></svg>
+                for the Amateur Radio community
+            </div>
             <div class="footer-copyright">&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</div>
             <div class="footer-links">
                 <a href="https://github.com/MW0MWZ/Pi-Clock" target="_blank" rel="noopener">GitHub</a>
@@ -369,5 +393,14 @@
     </div>
 
     <script src="/static/js/dashboard.js"></script>
+
+    {{/*
+        Upgrade-step icon set. Defined once here and inserted into each
+        step row by {{template "upgrade-step-icons"}}. Keeping the four
+        SVGs together means each step can display any state purely via
+        the CSS class on the parent .upgrade-step element — no JS needed
+        to swap icon refs when the state transitions.
+    */}}
+    {{define "upgrade-step-icons"}}<svg class="icon icon-state-pending" aria-hidden="true"><use href="/static/icons.svg#icon-circle"/></svg><svg class="icon icon-state-active" aria-hidden="true"><use href="/static/icons.svg#icon-loader"/></svg><svg class="icon icon-state-done" aria-hidden="true"><use href="/static/icons.svg#icon-check"/></svg><svg class="icon icon-state-error" aria-hidden="true"><use href="/static/icons.svg#icon-x"/></svg>{{end}}
 </body>
 </html>

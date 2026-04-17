@@ -655,7 +655,9 @@ function loadLayers() {
 
             /* Settings gear column — fixed width so labels line up.
              * Layers with config cards get a clickable gear icon;
-             * layers without get an empty spacer of the same width. */
+             * layers without get an empty spacer of the same width.
+             * The gear is hidden when the layer is disabled — otherwise
+             * clicking it would scroll to a hidden card and look broken. */
             {
                 var col = document.createElement('div');
                 col.className = 'layer-settings-col';
@@ -664,8 +666,14 @@ function loadLayers() {
                     (function(cardId) {
                         var btn = document.createElement('button');
                         btn.className = 'layer-settings-btn';
-                        btn.innerHTML = '&#9881;';
+                        /* Inline SVG referencing the shared sprite. Using
+                         * innerHTML rather than createElementNS keeps the
+                         * call site short and matches the static template's
+                         * <use href="..."/> style. */
+                        btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-settings"/></svg>';
                         btn.title = 'Settings';
+                        btn.setAttribute('aria-label', 'Open layer settings');
+                        if (!layer.enabled) btn.style.display = 'none';
                         btn.addEventListener('click', function() {
                             var card = document.getElementById(cardId);
                             if (card) card.scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -727,6 +735,18 @@ function loadLayers() {
                 cb.addEventListener('change', function() {
                     setCardVisibility('earthquake-card', this.checked);
                     if (this.checked) loadEarthquakeSettings();
+                });
+            }
+
+            /* Generic: keep the gear button in sync with the layer toggle.
+             * Every layer that has a settings card also has its gear hidden
+             * while disabled (set at build time above). This handler flips
+             * it back to visible when the layer is re-enabled. Placed after
+             * the per-layer branches so it applies uniformly. */
+            if (configCards[layer.name]) {
+                cb.addEventListener('change', function() {
+                    var b = row.querySelector('.layer-settings-btn');
+                    if (b) b.style.display = this.checked ? '' : 'none';
                 });
             }
         });

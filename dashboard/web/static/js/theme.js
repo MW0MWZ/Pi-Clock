@@ -40,7 +40,22 @@
         });
     });
 
+    /*
+     * Reflect the active theme in the toggle button. The button text
+     * describes the action (what clicking it will do), so "Light Mode"
+     * appears while the dark theme is active, and vice versa. The icon
+     * is a <use> reference into the shared sprite; swapping href is
+     * cheaper than rebuilding the button DOM on every click.
+     */
     function updateButton(btn, theme) {
-        btn.textContent = theme === 'dark' ? '\u2600 Light Mode' : '\u263E Dark Mode';
+        var label = btn.querySelector('#theme-label');
+        var iconUse = btn.querySelector('#theme-icon-use');
+        if (theme === 'dark') {
+            if (label) label.textContent = 'Light Mode';
+            if (iconUse) iconUse.setAttribute('href', '/static/icons.svg#icon-sun');
+        } else {
+            if (label) label.textContent = 'Dark Mode';
+            if (iconUse) iconUse.setAttribute('href', '/static/icons.svg#icon-moon');
+        }
     }
 })();

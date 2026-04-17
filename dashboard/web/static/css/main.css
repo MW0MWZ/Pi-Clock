@@ -60,6 +60,33 @@
     padding: 0;
 }
 
+/* ── Icon system ──────────────────────────────────────────── */
+/* Inline SVG icons referenced from the /static/icons.svg sprite.
+ * Sized as a 1em square so they scale naturally with the text
+ * around them; stroke/fill inherit via currentColor (set on the
+ * sprite root), so the same icon adapts to light and dark themes
+ * automatically. Decorative icons must carry aria-hidden="true";
+ * icon-only buttons must carry aria-label on the parent element. */
+.icon {
+    width: 1em;
+    height: 1em;
+    /* Vertical baseline optical adjustment. Without this, inline
+     * SVGs sit slightly below the text x-height and look dropped.
+     * Ignored when the parent is flex (align-items handles it). */
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+    /* Stroke presentation for Lucide-style icons. Set as CSS (not
+     * SVG attributes) so the values cascade through the <use>
+     * shadow tree into the cloned <symbol> contents — attributes
+     * on the external sprite root don't transfer. Individual icons
+     * can override via more specific selectors (e.g. .icon-heart). */
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 body {
     /* System font stack: uses the native UI font on each platform
      * (San Francisco on macOS, Segoe on Windows, Roboto on Android)
@@ -194,7 +221,12 @@ select.form-control {
 
 /* ── Buttons ──────────────────────────────────────────────── */
 .btn {
-    display: inline-block;
+    /* inline-flex + gap lets buttons pair an icon with text cleanly
+     * without per-icon margin hacks. Text-only buttons render the
+     * same as display: inline-block (single flex child, no gap). */
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 16px;
     font-size: 14px;
     font-weight: 500;
@@ -202,6 +234,24 @@ select.form-control {
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
+}
+
+/* Icons inside buttons scale with button font-size. Slightly
+ * larger than the text so the glyph visually matches a capital
+ * letter rather than an x-height. */
+.btn .icon {
+    width: 1.15em;
+    height: 1.15em;
+}
+
+/* Filled red heart for the "built with love" footer. The outline
+ * heart from Lucide is too subtle next to body text, so fill it
+ * and colour it with the danger token — looks intentional in
+ * both themes. */
+.icon-heart {
+    color: var(--danger);
+    fill: currentColor;
+    stroke: none;
 }
 
 .btn-primary {
@@ -339,10 +389,16 @@ select.form-control {
 }
 
 .layer-settings-btn {
+    /* Flex so the SVG icon child sits centred in the button box
+     * regardless of the font baseline. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     color: var(--text-secondary);
-    font-size: 22px;
+    /* font-size drives the icon's em-based 1em sizing. */
+    font-size: 18px;
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 4px;
@@ -363,12 +419,16 @@ select.form-control {
 }
 
 .card-back-btn {
+    /* Flex centres the inline SVG inside the bordered pill. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: 1px solid var(--border);
     color: var(--text-secondary);
     font-size: 16px;
     cursor: pointer;
-    padding: 2px 8px;
+    padding: 4px 8px;
     border-radius: 6px;
     transition: color 0.15s, border-color 0.15s, background 0.15s;
     line-height: 1;
@@ -663,18 +723,33 @@ select.form-control {
     gap: 10px;
 }
 
+/* Upgrade-step icon slot. Each step in the template contains all
+ * four state SVGs; CSS shows exactly one based on the parent state
+ * class (pending/active/done/error). Keeping the markup inline
+ * avoids any JS churn when swapping icons during the upgrade flow. */
 .upgrade-step .step-icon {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 20px;
-    text-align: center;
+    height: 20px;
+    font-size: 18px;          /* drives the 1em icon sizing */
     flex-shrink: 0;
 }
 
-.upgrade-step.pending .step-icon::after { content: "\25CB"; }
-.upgrade-step.active { color: #e0e0e0; }
-.upgrade-step.active .step-icon { animation: spin 0.8s linear infinite; }
-.upgrade-step.active .step-icon::after { content: "\25E6"; color: var(--accent); }
-.upgrade-step.done { color: #8c8; }
-.upgrade-step.done .step-icon::after { content: "\2713"; }
-.upgrade-step.error { color: #c66; }
-.upgrade-step.error .step-icon::after { content: "\2717"; }
+.upgrade-step .step-icon .icon { display: none; }
+
+.upgrade-step.pending .step-icon .icon-state-pending { display: inline-block; color: var(--text-muted); }
+
+.upgrade-step.active { color: var(--text-primary); }
+.upgrade-step.active .step-icon .icon-state-active {
+    display: inline-block;
+    color: var(--accent);
+    animation: spin 0.8s linear infinite;
+}
+
+.upgrade-step.done { color: var(--success); }
+.upgrade-step.done .step-icon .icon-state-done { display: inline-block; }
+
+.upgrade-step.error { color: var(--danger); }
+.upgrade-step.error .step-icon .icon-state-error { display: inline-block; }
