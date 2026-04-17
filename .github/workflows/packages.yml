@@ -28,6 +28,12 @@ jobs:
     permissions:
       contents: write
       pages: write
+    # Serialise against other workflows that push to gh-pages
+    # (build-os.yml, gfs-data.yml) so the final APKINDEX push
+    # doesn't race with a concurrent GFS or OS-image update.
+    concurrency:
+      group: gh-pages-writer
+      cancel-in-progress: false
 
     steps:
     - name: Checkout

@@ -23,6 +23,12 @@ permissions:
 jobs:
   fetch-gfs:
     runs-on: ubuntu-latest
+    # Serialise against other workflows that push to gh-pages
+    # (packages.yml, build-os.yml) so a scheduled GFS push can't
+    # collide with an in-flight package or OS-image release.
+    concurrency:
+      group: gh-pages-writer
+      cancel-in-progress: false
     steps:
       - name: Checkout gh-pages
         uses: actions/checkout@v4

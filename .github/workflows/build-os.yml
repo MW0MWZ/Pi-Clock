@@ -32,6 +32,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    # Serialise against other workflows that push to gh-pages
+    # (packages.yml, gfs-data.yml). Without this, a scheduled GFS
+    # push landing mid-build can reject our final latest.json push.
+    concurrency:
+      group: gh-pages-writer
+      cancel-in-progress: false
 
     steps:
     - name: Checkout repository
