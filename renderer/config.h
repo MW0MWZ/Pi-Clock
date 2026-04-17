@@ -22,21 +22,100 @@
  * pic_config_t - Global renderer configuration.
  *
  *   center_lon - The longitude (in degrees, -180 to +180) that
- *                should appear at the horizontal centre of the map.
- *                Default is 0.0 (Prime Meridian / Greenwich).
+ *                should appear at the horizontal centre of the map
+ *                at zoom=0. Default 0.0 (Prime Meridian).
  *
- *                Setting this to, say, 139.7 (Tokyo) shifts the
- *                map so that Tokyo is in the centre and the seam
- *                appears in the Atlantic Ocean instead of at the
- *                date line.
+ *   map_zoom   - Zoom fraction 0.0..1.0 (saved as MAP_ZOOM=0..100
+ *                percent in the renderer config). 0 = full world
+ *                view, 1 = maximum zoom (factor PIC_ZOOM_MAX, see
+ *                pic_zoom_factor()), progressively panning toward
+ *                QTH as zoom increases.
  *
- *                This affects all layers: base map images are
- *                wrapped, coordinate-based overlays (grid, borders,
- *                daylight mask) adjust their projection math.
+ *   qth_lat,
+ *   qth_lon    - Home QTH used as the pan target during zoom. If
+ *                either QTH is at exactly 0 (the "unset" sentinel
+ *                in the rest of the renderer) pan-to-QTH is disabled
+ *                and the viewport stays centred on center_lon/0°.
+ *
+ *   view_center_lat,
+ *   view_center_lon - The lat/lon at the centre of the visible
+ *                     viewport. Derived from center_lon, map_zoom,
+ *                     and qth_* by pic_config_recompute_viewport().
+ *
+ *   view_span_lat,
+ *   view_span_lon   - Degrees of latitude/longitude covered by the
+ *                     full screen height/width at the current zoom.
+ *                     At zoom=0 these are 180/360 (whole world),
+ *                     shrinking linearly toward 180/PIC_ZOOM_MAX
+ *                     and 360/PIC_ZOOM_MAX at zoom=1.
+ *
+ *   viewport_gen    - Incremented every time the viewport changes
+ *                     (via pic_config_recompute_viewport). Layers
+ *                     with internal caches (cloud/precip/aurora/
+ *                     wind) compare the generation to decide when
+ *                     to rebuild.
  */
 typedef struct {
     double center_lon;
+    double map_zoom;
+    double qth_lat;
+    double qth_lon;
+
+    double view_center_lat;
+    double view_center_lon;
+    double view_span_lat;
+    double view_span_lon;
+
+    unsigned int viewport_gen;
 } pic_config_t;
+
+/* Maximum zoom factor at map_zoom=1.0.
+ *
+ * At 3x the viewport shows 120° longitude × 60° latitude — roughly
+ * a continent-plus-ocean view from a mid-latitude QTH (e.g. all of
+ * Europe + the North Atlantic + the eastern USA from a UK QTH).
+ *
+ * Earlier iterations tried 6x and 4x but both clipped too tight
+ * for a dashboard-scale overview. If you change this, update the
+ * dashboard hint text too (templates/dashboard.html).
+ */
+#define PIC_ZOOM_MAX 3.0
+
+/*
+ * pic_zoom_factor - Current zoom factor (1.0..PIC_ZOOM_MAX).
+ *
+ * Linear interpolation from 1.0 at map_zoom=0 to PIC_ZOOM_MAX at
+ * map_zoom=1. At the returned factor z: view_span_lon = 360/z and
+ * view_span_lat = 180/z.
+ */
+double pic_zoom_factor(void);
+
+/*
+ * pic_wrap_threshold_px - Pixel distance above which two consecutive
+ * projected points are considered to be on opposite sides of the
+ * longitudinal seam (and the line between them should be broken).
+ *
+ * At zoom=1 (full world), this is width/2 — matching the previous
+ * hard-coded heuristic. At zoom=z, view_span_lon = 360/z, so 180°
+ * of angular separation maps to (180/view_span_lon) * width =
+ * (z/2) * width screen pixels.
+ *
+ * Callers: layers_borders.c, layers_cqzone.c, layers_ituzone.c,
+ * layers_timezone.c, layers_wind.c — anywhere a polyline segment
+ * needs wrap detection.
+ */
+double pic_wrap_threshold_px(int width);
+
+/*
+ * pic_config_recompute_viewport - Derive viewport fields from the
+ * primary inputs (center_lon, map_zoom, qth_lat, qth_lon). Also
+ * bumps viewport_gen so layer caches invalidate.
+ *
+ * Call after any change to those inputs — at startup, in --snapshot
+ * CLI parsing, and on SIGHUP reload. Safe to call repeatedly; only
+ * derived state is affected.
+ */
+void pic_config_recompute_viewport(void);
 
 /* Global config instance — defined in config.c, read everywhere */
 extern pic_config_t pic_config;
@@ -131,6 +210,7 @@ typedef struct {
     double qth_lat;
     double qth_lon;
     double center_lon;
+    double map_zoom;     /* 0.0..1.0, parsed from MAP_ZOOM=0..100 */
 } pic_renderer_conf_t;
 
 /*

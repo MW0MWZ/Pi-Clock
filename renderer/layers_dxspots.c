@@ -86,7 +86,7 @@ void pic_layer_render_dxspots(cairo_t *cr, int width, int height,
     pic_spotlist_t *spots = (pic_spotlist_t *)user_data;
     double font_size = height / 120.0;
     double dot_radius = height / 200.0;
-    double half_width = width / 2.0;
+    double half_width = pic_wrap_threshold_px(width);
     int i, j;
 
     if (!spots) return;

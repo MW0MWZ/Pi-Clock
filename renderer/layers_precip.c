@@ -38,6 +38,8 @@
 static cairo_surface_t *precip_cache = NULL;
 static int precip_cache_w = 0, precip_cache_h = 0;
 static time_t precip_cache_ref = 0;
+/* Viewport generation baked into the cached surface. */
+static unsigned int precip_cache_viewport_gen = 0;
 
 /*
  * radar_colour - Map precipitation amount to ARGB pixel value.
@@ -126,6 +128,7 @@ void pic_layer_render_precip(cairo_t *cr, int width, int height,
     }
 
     if (ref != precip_cache_ref) need_redraw = 1;
+    if (pic_config.viewport_gen != precip_cache_viewport_gen) need_redraw = 1;
 
     if (!need_redraw) {
         cairo_set_source_surface(cr, precip_cache, 0, 0);
@@ -134,11 +137,15 @@ void pic_layer_render_precip(cairo_t *cr, int width, int height,
     }
 
     {
-        /* Create a tiny surface at grid resolution */
+        /* Create a tiny surface at grid resolution.
+         *
+         * Unlike the pre-zoom code we don't bake pic_config.center_lon
+         * into a column shift here — pic_paint_viewport applies the
+         * viewport (pan + zoom) when painting the grid onto the
+         * cache surface below. Column 0 = lon -180°, row 0 = lat +90°. */
         cairo_surface_t *grid_surf;
         unsigned int *pixels;
         int stride, gy, gx;
-        int center_off;
         cairo_t *cc;
 
         grid_surf = cairo_image_surface_create(
@@ -153,41 +160,32 @@ void pic_layer_render_precip(cairo_t *cr, int width, int height,
         pixels = (unsigned int *)cairo_image_surface_get_data(grid_surf);
         stride = cairo_image_surface_get_stride(grid_surf) / 4;
 
-        /* Center longitude offset in grid columns */
-        center_off = (int)(pic_config.center_lon);
-        if (center_off < 0) center_off += 360;
-
         pthread_mutex_lock(&data->mutex);
 
         for (gy = 0; gy < PIC_WIND_NY; gy++) {
             for (gx = 0; gx < PIC_WIND_NX; gx++) {
-                int src_col = (gx + center_off) % PIC_WIND_NX;
                 pixels[gy * stride + gx] =
-                    radar_pixel(data->precip[gy][src_col]);
+                    radar_pixel(data->precip[gy][gx]);
             }
         }
 
         pthread_mutex_unlock(&data->mutex);
         cairo_surface_mark_dirty(grid_surf);
 
-        /* Scale up to display resolution with bilinear filtering */
+        /* Paint the grid through the current viewport */
         cc = cairo_create(precip_cache);
         cairo_set_operator(cc, CAIRO_OPERATOR_CLEAR);
         cairo_paint(cc);
         cairo_set_operator(cc, CAIRO_OPERATOR_OVER);
 
-        cairo_scale(cc,
-                    (double)width / PIC_WIND_NX,
-                    (double)height / PIC_WIND_NY);
-        cairo_set_source_surface(cc, grid_surf, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(cc),
-                                 CAIRO_FILTER_BILINEAR);
-        cairo_paint(cc);
+        pic_paint_viewport(cc, grid_surf, width, height);
 
         cairo_destroy(cc);
         cairo_surface_destroy(grid_surf);
         precip_cache_ref = ref;
-        printf("precip: overlay cached (bilinear)\n");
+        precip_cache_viewport_gen = pic_config.viewport_gen;
+        printf("precip: overlay cached (viewport gen=%u)\n",
+               precip_cache_viewport_gen);
     }
 
     cairo_set_source_surface(cr, precip_cache, 0, 0);

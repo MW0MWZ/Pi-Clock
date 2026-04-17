@@ -205,4 +205,48 @@ void pic_layer_free_surface(pic_layer_t *layer);
  */
 void pic_layer_stack_destroy(pic_layer_stack_t *stack);
 
+/*
+ * pic_paint_viewport - Paint a full-globe source surface through the
+ * current viewport onto the Cairo context.
+ *
+ * The source is assumed to cover the whole world (src_w pixels of
+ * longitude from -180° to +180°, src_h pixels of latitude from +90°
+ * to -90°). This helper builds a pattern matrix that maps destination
+ * pixels (0..width, 0..height) to the correct source pixels given
+ * pic_config.view_center_lat/lon and view_span_lat/lon, then paints
+ * the result.
+ *
+ * Longitudinal wrapping is handled via CAIRO_EXTEND_REPEAT — the
+ * pattern tiles in both axes, but because the viewport latitude is
+ * clamped to stay inside [-90°, +90°], only the longitude wrap
+ * actually fires.
+ *
+ * Used by layers_base (Black Marble), layers_daylight (Blue Marble
+ * and the solar illumination mask), and the grid-based overlays
+ * (cloud, precip, aurora). Keeping one place for this math means
+ * only one file needs updating when the projection evolves.
+ *
+ *   cr     - Destination Cairo context.
+ *   src    - Full-globe source surface (any format: ARGB32 or A8).
+ *   width  - Destination width in pixels.
+ *   height - Destination height in pixels.
+ */
+void pic_paint_viewport(cairo_t *cr, cairo_surface_t *src,
+                        int width, int height);
+
+/*
+ * pic_viewport_pattern - Build a Cairo pattern that samples `src`
+ * through the current viewport, with CAIRO_EXTEND_REPEAT + bilinear
+ * filter already applied.
+ *
+ * Exposed so callers that need a custom paint operator (the daylight
+ * layer uses cairo_mask_surface rather than cairo_paint) can reuse
+ * the same matrix math as pic_paint_viewport. Caller owns the
+ * returned pattern and must cairo_pattern_destroy it.
+ *
+ * Returns NULL if pattern creation fails.
+ */
+cairo_pattern_t *pic_viewport_pattern(cairo_surface_t *src,
+                                      int width, int height);
+
 #endif /* PIC_LAYER_H */

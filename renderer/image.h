@@ -56,4 +56,41 @@ cairo_surface_t *pic_image_load(const char *path);
 cairo_surface_t *pic_image_load_scaled(const char *path,
                                        int width, int height);
 
+/*
+ * pic_map_load - Load a world map image with optional hi-res upgrade.
+ *
+ * Builds the path <maps_dir>/<folder>/<basename>_<suffix>.jpg where
+ * suffix is chosen from the display resolution (720p/1080p/1440p/4k).
+ *
+ * When allow_hires is non-zero and the display is below 4K, first
+ * try to load the _4k variant at its native resolution (via
+ * pic_image_load, no downscaling). This keeps the extra source
+ * detail available for zoom painting — a 1080p display with a 4k
+ * Blue Marble source samples ~2x more source pixels per screen
+ * pixel than loading the matched-res 1080p file.
+ *
+ * If the 4k upgrade fails or is disabled, fall back to the matched
+ * resolution file via pic_image_load_scaled(display_w, display_h),
+ * which is the pre-zoom behaviour.
+ *
+ * allow_hires is the caller's RAM gate: the 4k surface is ~33 MB
+ * vs. ~8 MB at 1080p, so pass 0 on Pi Zero/Pi 1 class devices
+ * (< ~768 MB RAM). On desktop dev hosts always pass 1.
+ *
+ *   maps_dir    - Root of the maps directory.
+ *   folder      - Subdirectory (e.g. "blue_marble" or "black_marble").
+ *   basename    - Filename prefix (e.g. "blue_marble").
+ *   display_w,
+ *   display_h   - Target display dimensions in pixels.
+ *   allow_hires - Non-zero to prefer the 4k source when available.
+ *
+ * Returns a Cairo surface (at either native 4k or display size), or
+ * NULL if no file could be loaded.
+ */
+cairo_surface_t *pic_map_load(const char *maps_dir,
+                              const char *folder,
+                              const char *basename,
+                              int display_w, int display_h,
+                              int allow_hires);
+
 #endif /* PIC_IMAGE_H */

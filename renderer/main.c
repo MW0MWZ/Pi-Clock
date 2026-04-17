@@ -8,6 +8,7 @@
  * Usage:
  *   pi-clock --snapshot output.png --maps-dir /maps
  *   pi-clock --snapshot output.png --maps-dir /maps --center-lon 139.7
+ *   pi-clock --snapshot output.png --maps-dir /maps --zoom 60
  *   pi-clock --snapshot output.png --maps-dir /maps --time "2026-06-21 12:00:00"
  *
  * Copyright (C) 2026 Andy Taylor (MW0MWZ)
@@ -24,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 #define MAX_PATH 512
 
@@ -70,6 +72,9 @@ static void print_usage(const char *progname)
         "  --snapshot <file>      Render a single frame to PNG and exit\n"
         "  --maps-dir <dir>       Directory containing map images\n"
         "  --center-lon <deg>     Center longitude (-180 to 180, default: 0)\n"
+        "  --zoom <0-100>         Map zoom percent, pans toward QTH (default: 0)\n"
+        "  --qth-lat <deg>        QTH latitude for zoom pan (default: 0)\n"
+        "  --qth-lon <deg>        QTH longitude for zoom pan (default: 0)\n"
         "  --width <pixels>       Output width (default: 1920)\n"
         "  --height <pixels>      Output height (default: 1080)\n"
         "  --time <datetime>      Render at specific UTC time\n"
@@ -79,22 +84,8 @@ static void print_usage(const char *progname)
         "Examples:\n"
         "  %s --snapshot test.png --maps-dir /maps\n"
         "  %s --snapshot test.png --maps-dir /maps --center-lon -98.5\n"
-        "  %s --snapshot test.png --maps-dir /maps --center-lon 139.7\n",
+        "  %s --snapshot test.png --maps-dir /maps --zoom 60 --qth-lat 52 --qth-lon -1\n",
         progname, progname, progname, progname);
-}
-
-/*
- * get_resolution_suffix - Map output height to filename suffix.
- */
-static const char *get_resolution_suffix(int height)
-{
-    switch (height) {
-    case 720:  return "720p";
-    case 1080: return "1080p";
-    case 1440: return "1440p";
-    case 2160: return "4k";
-    default:   return "1080p";
-    }
 }
 
 /*
@@ -121,24 +112,21 @@ static int run_snapshot(const char *output_path, const char *maps_dir,
     cairo_t *cr;
     cairo_status_t status = CAIRO_STATUS_SUCCESS;
     char path[MAX_PATH];
-    const char *res;
 
-    printf("snapshot: rendering %dx%d frame (center_lon=%.1f)\n",
-           width, height, pic_config.center_lon);
+    printf("snapshot: rendering %dx%d frame "
+           "(center_lon=%.1f zoom=%.0f%%)\n",
+           width, height, pic_config.center_lon,
+           pic_config.map_zoom * 100.0);
 
-    res = get_resolution_suffix(height);
-
-    /* Load map images */
+    /* Load map images. Snapshot is always run on dev hardware with
+     * plenty of RAM, so always opt into the 4k source for zoom
+     * headroom. */
     if (maps_dir) {
-        snprintf(path, sizeof(path), "%s/black_marble/black_marble_%s.jpg",
-                 maps_dir, res);
-        printf("snapshot: loading night map: %s\n", path);
-        black_marble = pic_image_load_scaled(path, width, height);
-
-        snprintf(path, sizeof(path), "%s/blue_marble/blue_marble_%s.jpg",
-                 maps_dir, res);
-        printf("snapshot: loading day map: %s\n", path);
-        blue_marble = pic_image_load_scaled(path, width, height);
+        printf("snapshot: loading maps from %s\n", maps_dir);
+        black_marble = pic_map_load(maps_dir, "black_marble",
+                                    "black_marble", width, height, 1);
+        blue_marble = pic_map_load(maps_dir, "blue_marble",
+                                   "blue_marble", width, height, 1);
 
         /* Load country border data */
         snprintf(path, sizeof(path), "%s/borders.dat", maps_dir);
@@ -238,13 +226,46 @@ int main(int argc, char *argv[])
     time_t render_time = time(NULL);
     int i;
 
+    /* Seed pic_config from the saved renderer config file.
+     *
+     * This picks up dashboard-written values (CENTER_LON, MAP_ZOOM,
+     * QTH_LAT/LON) without requiring the init script to forward them
+     * as CLI flags. CLI flags below still win because they run after.
+     *
+     * On a clean install the file doesn't exist yet and pic_load_renderer_conf
+     * is a no-op, so pic_config keeps its compile-time defaults.
+     */
+    {
+        pic_renderer_conf_t rconf;
+        pic_load_renderer_conf(&rconf);
+        pic_config.center_lon = rconf.center_lon;
+        pic_config.map_zoom   = rconf.map_zoom;
+        pic_config.qth_lat    = rconf.qth_lat;
+        pic_config.qth_lon    = rconf.qth_lon;
+    }
+
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--snapshot") == 0 && i + 1 < argc) {
             snapshot_path = argv[++i];
         } else if (strcmp(argv[i], "--maps-dir") == 0 && i + 1 < argc) {
             maps_dir = argv[++i];
         } else if (strcmp(argv[i], "--center-lon") == 0 && i + 1 < argc) {
-            pic_config.center_lon = strtod(argv[++i], NULL);
+            double v = strtod(argv[++i], NULL);
+            /* isfinite guards against nan/inf slipping through
+             * the clamps below (nan compares false to everything). */
+            if (isfinite(v)) pic_config.center_lon = v;
+        } else if (strcmp(argv[i], "--zoom") == 0 && i + 1 < argc) {
+            double z = strtod(argv[++i], NULL);
+            if (!isfinite(z)) z = 0.0;
+            if (z < 0.0)   z = 0.0;
+            if (z > 100.0) z = 100.0;
+            pic_config.map_zoom = z / 100.0;
+        } else if (strcmp(argv[i], "--qth-lat") == 0 && i + 1 < argc) {
+            double v = strtod(argv[++i], NULL);
+            if (isfinite(v)) pic_config.qth_lat = v;
+        } else if (strcmp(argv[i], "--qth-lon") == 0 && i + 1 < argc) {
+            double v = strtod(argv[++i], NULL);
+            if (isfinite(v)) pic_config.qth_lon = v;
         } else if (strcmp(argv[i], "--width") == 0 && i + 1 < argc) {
             width = (int)strtol(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--height") == 0 && i + 1 < argc) {
@@ -265,6 +286,11 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
+
+    /* Derive viewport from whatever combination of conf+CLI landed
+     * in pic_config. Both snapshot and display-mode rely on the
+     * derived view_* fields for all projection/paint math. */
+    pic_config_recompute_viewport();
 
     if (snapshot_path) {
         return run_snapshot(snapshot_path, maps_dir, width, height,

@@ -46,7 +46,7 @@ void pic_layer_render_timezone(cairo_t *cr, int width, int height,
     /* Scale font relative to display height */
     font_size = height / 70.0;
 
-    half_width = width / 2.0;
+    half_width = pic_wrap_threshold_px(width);
 
     /*
      * Phase 1: Draw the actual timezone boundary lines.
@@ -57,7 +57,9 @@ void pic_layer_render_timezone(cairo_t *cr, int width, int height,
      */
     if (tz_data && tz_data->num_polygons > 0) {
         cairo_set_dash(cr, dashes, 2, 0);
-        cairo_set_source_rgba(cr, 0.35, 0.55, 1.0, 0.55);
+        /* Blue is perceptually dimmer than other overlay colours,
+         * so it needs higher alpha to read at the same intensity. */
+        cairo_set_source_rgba(cr, 0.35, 0.55, 1.0, 0.75);
         cairo_set_line_width(cr, 1.0);
         cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
 
@@ -137,8 +139,8 @@ void pic_layer_render_timezone(cairo_t *cr, int width, int height,
         if (text_x < 2) text_x = 2;
         if (text_x + extents.width > width - 2) text_x = width - extents.width - 2;
 
-        /* Blue labels matching the boundary line colour */
-        cairo_set_source_rgba(cr, 0.3, 0.5, 1.0, 0.7);
+        /* Blue labels matching the boundary line colour. */
+        cairo_set_source_rgba(cr, 0.3, 0.5, 1.0, 0.9);
         cairo_move_to(cr, text_x, font_size + 3);
         cairo_show_text(cr, label);
     }

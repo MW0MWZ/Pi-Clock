@@ -29,6 +29,7 @@
 #include "image.h"
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 /*
  * pic_image_load - Load an image file into a Cairo surface.
@@ -202,4 +203,56 @@ cairo_surface_t *pic_image_load_scaled(const char *path,
     cairo_surface_destroy(source);
 
     return scaled;
+}
+
+/*
+ * suffix_for_height - Matched-resolution filename suffix.
+ *
+ * Defaults to "1080p" for unrecognised heights, matching the
+ * behaviour of the display.c/main.c helpers that existed before
+ * this function was factored out.
+ */
+static const char *suffix_for_height(int height)
+{
+    switch (height) {
+    case 720:  return "720p";
+    case 1080: return "1080p";
+    case 1440: return "1440p";
+    case 2160: return "4k";
+    default:   return "1080p";
+    }
+}
+
+cairo_surface_t *pic_map_load(const char *maps_dir,
+                              const char *folder,
+                              const char *basename,
+                              int display_w, int display_h,
+                              int allow_hires)
+{
+    char path[512];
+
+    if (!maps_dir || !folder || !basename) return NULL;
+
+    /* Hi-res upgrade: sample from the 4k source even on a smaller
+     * display so zoom retains detail. Only attempted if the caller
+     * permits (RAM gate) and the display isn't already 4k. */
+    if (allow_hires && display_h < 2160) {
+        snprintf(path, sizeof(path), "%s/%s/%s_4k.jpg",
+                 maps_dir, folder, basename);
+        if (access(path, R_OK) == 0) {
+            cairo_surface_t *surf = pic_image_load(path);
+            if (surf) {
+                printf("image: hi-res upgrade — loaded 4k '%s' for "
+                       "%dx%d display (zoom headroom)\n",
+                       path, display_w, display_h);
+                return surf;
+            }
+            /* Fall through to matched-res on load failure */
+        }
+    }
+
+    /* Matched-resolution fallback — original behaviour. */
+    snprintf(path, sizeof(path), "%s/%s/%s_%s.jpg",
+             maps_dir, folder, basename, suffix_for_height(display_h));
+    return pic_image_load_scaled(path, display_w, display_h);
 }

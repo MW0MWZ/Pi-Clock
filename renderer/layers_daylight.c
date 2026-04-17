@@ -2,22 +2,25 @@
  * layers_daylight.c - Daylight overlay layer (Blue Marble + solar mask)
  *
  * Paints Blue Marble satellite imagery only where it's currently
- * daytime, using a solar illumination alpha mask. Supports horizontal
- * centering via pic_config.center_lon.
+ * daytime, using a solar illumination alpha mask.
  *
- * The approach:
- *   1. Compute solar illumination on a small grid (360x181, one
- *      value per degree) — very fast, ~65K trig calls
- *   2. Scale the grid up to display resolution using Cairo's
- *      bilinear filter — gives a silky smooth terminator with
- *      no visible stepping or blocky edges
- *   3. Paint Blue Marble through the scaled mask
+ * Two-phase approach (preserved from the pre-zoom design):
+ *   Phase 1: Compute illumination on a small 360x181 grid covering
+ *            the whole globe at one sample per degree. Independent
+ *            of the viewport — cheap to compute, easy to cache in
+ *            future if needed.
+ *   Phase 2: Scale the small mask up to display resolution through
+ *            the current viewport, producing a silky-smooth
+ *            terminator with bilinear filtering.
+ *   Phase 3: Paint the Blue Marble image through the scaled mask,
+ *            again via the viewport transform. Longitude wrap is
+ *            handled by CAIRO_EXTEND_REPEAT in pic_paint_viewport.
  *
- * This is much faster AND smoother than the old per-pixel approach
- * with block fills. At 4K, the old method did ~32K trig calls with
- * visible 8px blocks at the terminator. The new method does ~65K
- * trig calls (slightly more) but the bilinear filter produces a
- * perfectly smooth gradient — no visible grid at any resolution.
+ * Compared to the pre-zoom code, the big change is that phases 2
+ * and 3 now run through pic_paint_viewport() rather than a simple
+ * cairo_scale(width/MASK_W, height/MASK_H) + a center_lon-only
+ * offset. Phase 1 is simpler because we no longer bake the
+ * center_lon shift into the grid — the viewport transform does it.
  *
  * Copyright (C) 2026 Andy Taylor (MW0MWZ)
  * SPDX-License-Identifier: GPL-2.0-only
@@ -34,18 +37,13 @@
 
 /* Grid resolution for the illumination mask.
  * 360x181 = one sample per degree, matching the GFS weather grid.
- * At this resolution the terminator is computed to sub-degree
- * precision, and bilinear scaling smooths it perfectly. */
+ * Column 0 maps to lon=-180°, column 359 to lon=+179°. Row 0 maps
+ * to lat=+90°, row 180 to lat=-90°. */
 #define MASK_W 360
 #define MASK_H 181
 
 /*
  * pic_layer_render_daylight - Render the daylight overlay.
- *
- * Two-phase approach:
- *   Phase 1: Compute illumination on a small 360x181 grid
- *   Phase 2: Scale up to display resolution with bilinear filtering,
- *            then paint Blue Marble through the scaled mask
  */
 void pic_layer_render_daylight(cairo_t *cr, int width, int height,
                                time_t now, void *user_data)
@@ -57,16 +55,17 @@ void pic_layer_render_daylight(cairo_t *cr, int width, int height,
     int mask_stride;
     pic_solar_position_t sun;
     int gx, gy;
-    int src_w;
-    double offset_x;
 
     if (!blue_marble) return;
 
     sun = pic_solar_position(now);
 
     /*
-     * Phase 1: Build a small A8 illumination grid.
-     * One byte per degree — 360x181 = ~65 KB.
+     * Phase 1: Build a small A8 illumination grid covering the whole
+     * globe at one sample per degree. Column gx encodes lon directly
+     * (-180 + gx degrees), row gy encodes lat directly (90 - gy).
+     * No viewport offset applied here — the transform in phase 2
+     * handles it.
      */
     small_mask = cairo_image_surface_create(CAIRO_FORMAT_A8,
                                              MASK_W, MASK_H);
@@ -85,18 +84,9 @@ void pic_layer_render_daylight(cairo_t *cr, int width, int height,
         double lat_rad = lat_deg * DEG_TO_RAD;
 
         for (gx = 0; gx < MASK_W; gx++) {
-            /* Map grid column to real longitude, accounting for
-             * center_lon wrapping. Column 0 = left edge of display,
-             * which corresponds to center_lon - 180. */
-            double lon_deg = (double)gx - 180.0 + pic_config.center_lon;
-            double lon_rad, illum;
-
-            /* Wrap to -180..180 */
-            if (lon_deg > 180.0) lon_deg -= 360.0;
-            if (lon_deg < -180.0) lon_deg += 360.0;
-
-            lon_rad = lon_deg * DEG_TO_RAD;
-            illum = pic_solar_illumination(lat_rad, lon_rad, &sun);
+            double lon_deg = (double)gx - 180.0;
+            double lon_rad = lon_deg * DEG_TO_RAD;
+            double illum = pic_solar_illumination(lat_rad, lon_rad, &sun);
 
             mask_data[gy * mask_stride + gx] =
                 (unsigned char)(illum * 255.0);
@@ -106,8 +96,18 @@ void pic_layer_render_daylight(cairo_t *cr, int width, int height,
     cairo_surface_mark_dirty(small_mask);
 
     /*
-     * Phase 2: Scale the small mask up to display resolution using
-     * bilinear filtering, producing a smooth terminator gradient.
+     * Phase 2: Scale the small mask up to display resolution through
+     * the current viewport. pic_paint_viewport handles both pan (centre
+     * shift) and zoom (span scaling) with bilinear filtering, producing
+     * a smooth terminator at any zoom level.
+     *
+     * Note: both small_mask and full_mask are CAIRO_FORMAT_A8.
+     * pic_paint_viewport works for A8 sources because it uses a
+     * generic pattern paint which preserves the alpha channel into
+     * the A8 destination. If we ever switch full_mask to ARGB32
+     * (for e.g. coloured twilight), this step would need a bespoke
+     * A8-to-ARGB path since CAIRO_OPERATOR_OVER on an A8 pattern
+     * source would write zeros for the colour channels.
      */
     full_mask = cairo_image_surface_create(CAIRO_FORMAT_A8,
                                             width, height);
@@ -119,14 +119,7 @@ void pic_layer_render_daylight(cairo_t *cr, int width, int height,
 
     {
         cairo_t *mc = cairo_create(full_mask);
-
-        cairo_scale(mc,
-                    (double)width / MASK_W,
-                    (double)height / MASK_H);
-        cairo_set_source_surface(mc, small_mask, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(mc),
-                                 CAIRO_FILTER_BILINEAR);
-        cairo_paint(mc);
+        pic_paint_viewport(mc, small_mask, width, height);
         cairo_destroy(mc);
     }
 
@@ -135,29 +128,19 @@ void pic_layer_render_daylight(cairo_t *cr, int width, int height,
     /*
      * Phase 3: Paint Blue Marble through the scaled mask.
      *
-     * The mask is already in display coordinates (no center_lon
-     * offset needed — we computed it with the offset baked in).
-     * But the Blue Marble image needs wrapping to match center_lon.
+     * The Blue Marble pattern is built via pic_viewport_pattern so
+     * zoom and pan are applied identically to the basemap (and
+     * phase 2 above). cairo_mask_surface then uses full_mask's
+     * alpha as a stencil over the Blue Marble source.
      */
-    src_w = cairo_image_surface_get_width(blue_marble);
-    offset_x = (pic_config.center_lon / 360.0) * src_w;
-
     {
-        cairo_pattern_t *pattern;
-
-        /* Repeating Blue Marble pattern with wrapping offset */
-        pattern = cairo_pattern_create_for_surface(blue_marble);
-        cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
-
-        {
-            cairo_matrix_t matrix;
-            cairo_matrix_init_translate(&matrix, offset_x, 0);
-            cairo_pattern_set_matrix(pattern, &matrix);
+        cairo_pattern_t *pattern =
+            pic_viewport_pattern(blue_marble, width, height);
+        if (pattern) {
+            cairo_set_source(cr, pattern);
+            cairo_mask_surface(cr, full_mask, 0, 0);
+            cairo_pattern_destroy(pattern);
         }
-
-        cairo_set_source(cr, pattern);
-        cairo_mask_surface(cr, full_mask, 0, 0);
-        cairo_pattern_destroy(pattern);
     }
 
     cairo_surface_destroy(full_mask);

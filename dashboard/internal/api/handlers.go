@@ -174,8 +174,12 @@ var layerDefs = []struct {
 	Default bool
 	Opacity float64
 }{
-	{"basemap", "Base Map (Night)", true, 1.0},
-	{"daylight", "Daylight (Day)", true, 1.0},
+	/* UI order: Day Map listed first for readability — the renderer
+	 * stack order (basemap painted before daylight) is unaffected
+	 * since that is hard-coded in display.c/main.c, not driven by
+	 * this list. Labels match the dashboard copy convention. */
+	{"daylight", "Day Map", true, 1.0},
+	{"basemap", "Night Map", true, 1.0},
 	{"borders", "Country Borders", true, 1.0},
 	{"grid", "Lat/Lon Grid", false, 1.0},
 	{"timezone", "Time Zones", true, 1.0},

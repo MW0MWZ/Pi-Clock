@@ -23,6 +23,9 @@
 static cairo_surface_t *cloud_cache = NULL;
 static int cloud_cache_w = 0, cloud_cache_h = 0;
 static time_t cloud_cache_ref = 0;
+/* Viewport generation baked into the cached surface. Set by
+ * pic_config_recompute_viewport; when it differs we redraw. */
+static unsigned int cloud_cache_viewport_gen = 0;
 
 void pic_layer_render_cloud(cairo_t *cr, int width, int height,
                             time_t now, void *user_data)
@@ -58,6 +61,7 @@ void pic_layer_render_cloud(cairo_t *cr, int width, int height,
     }
 
     if (ref != cloud_cache_ref) need_redraw = 1;
+    if (pic_config.viewport_gen != cloud_cache_viewport_gen) need_redraw = 1;
 
     if (!need_redraw) {
         cairo_set_source_surface(cr, cloud_cache, 0, 0);
@@ -68,7 +72,7 @@ void pic_layer_render_cloud(cairo_t *cr, int width, int height,
     {
         cairo_surface_t *grid_surf;
         unsigned int *pixels;
-        int stride, gy, gx, center_off;
+        int stride, gy, gx;
         cairo_t *cc;
 
         grid_surf = cairo_image_surface_create(
@@ -82,15 +86,16 @@ void pic_layer_render_cloud(cairo_t *cr, int width, int height,
         pixels = (unsigned int *)cairo_image_surface_get_data(grid_surf);
         stride = cairo_image_surface_get_stride(grid_surf) / 4;
 
-        center_off = (int)(pic_config.center_lon);
-        if (center_off < 0) center_off += 360;
-
+        /* Write the grid in raw lat/lon order: column 0 = lon -180°,
+         * column PIC_WIND_NX-1 = lon ~+179°. pic_paint_viewport
+         * applies the viewport centre/zoom transform when painting
+         * onto the cache surface below, so there is no need to
+         * pre-shift columns here. */
         pthread_mutex_lock(&data->mutex);
 
         for (gy = 0; gy < PIC_WIND_NY; gy++) {
             for (gx = 0; gx < PIC_WIND_NX; gx++) {
-                int src_col = (gx + center_off) % PIC_WIND_NX;
-                double cover = data->cloud[gy][src_col];
+                double cover = data->cloud[gy][gx];
                 unsigned int ia, ic;
 
                 if (cover < 5.0) {
@@ -120,18 +125,14 @@ void pic_layer_render_cloud(cairo_t *cr, int width, int height,
         cairo_paint(cc);
         cairo_set_operator(cc, CAIRO_OPERATOR_OVER);
 
-        cairo_scale(cc,
-                    (double)width / PIC_WIND_NX,
-                    (double)height / PIC_WIND_NY);
-        cairo_set_source_surface(cc, grid_surf, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(cc),
-                                 CAIRO_FILTER_BILINEAR);
-        cairo_paint(cc);
+        pic_paint_viewport(cc, grid_surf, width, height);
 
         cairo_destroy(cc);
         cairo_surface_destroy(grid_surf);
         cloud_cache_ref = ref;
-        printf("cloud: overlay cached (bilinear)\n");
+        cloud_cache_viewport_gen = pic_config.viewport_gen;
+        printf("cloud: overlay cached (viewport gen=%u)\n",
+               cloud_cache_viewport_gen);
     }
 
     cairo_set_source_surface(cr, cloud_cache, 0, 0);

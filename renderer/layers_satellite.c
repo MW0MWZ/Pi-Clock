@@ -54,7 +54,7 @@ void pic_layer_render_satellite(cairo_t *cr, int width, int height,
     pic_satlist_t *sats = (pic_satlist_t *)user_data;
     double dot_r = height / 150.0;
     double font_size = height / 120.0;
-    double half_w = width / 2.0;
+    double half_w = pic_wrap_threshold_px(width);
     int i, j;
 
     if (!sats) return;

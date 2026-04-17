@@ -1087,18 +1087,25 @@ static int pic_display_run_framebuffer(const char *maps_dir,
         fprintf(stderr, "display: base_surface allocation failed\n");
     }
 
-    /* Load maps */
+    /* Load maps.
+     *
+     * On devices with > ~768 MB total RAM we opt into the 4k source
+     * for basemap + daylight so zoom retains detail. The 4k surface
+     * is ~33 MB per map (~66 MB for both) vs. ~8 MB at 1080p, which
+     * is too much on Pi Zero / Pi 1 class hardware (<= 512 MB) —
+     * those stay on the matched-res path. 4k displays already load
+     * native 4k so the gate is moot. See pic_map_load(). */
     res = get_resolution_suffix(height);
     printf("display: loading maps at %s resolution...\n", res);
 
     if (maps_dir) {
-        snprintf(path, sizeof(path), "%s/black_marble/black_marble_%s.jpg",
-                 maps_dir, res);
-        black_marble = pic_image_load_scaled(path, width, height);
-
-        snprintf(path, sizeof(path), "%s/blue_marble/blue_marble_%s.jpg",
-                 maps_dir, res);
-        blue_marble = pic_image_load_scaled(path, width, height);
+        int allow_hires = (total_ram_mb >= 768);
+        black_marble = pic_map_load(maps_dir, "black_marble",
+                                    "black_marble", width, height,
+                                    allow_hires);
+        blue_marble = pic_map_load(maps_dir, "blue_marble",
+                                   "blue_marble", width, height,
+                                   allow_hires);
 
         snprintf(path, sizeof(path), "%s/borders.dat", maps_dir);
         if (pic_borders_load(path, &borders) == 0) borders_loaded = 1;
@@ -1659,7 +1666,17 @@ static int pic_display_run_framebuffer(const char *maps_dir,
                 pic_load_renderer_conf(&rconf);
 
                 pic_config.center_lon = rconf.center_lon;
-                printf("display: center_lon=%.1f\n", rconf.center_lon);
+                pic_config.map_zoom   = rconf.map_zoom;
+                pic_config.qth_lat    = rconf.qth_lat;
+                pic_config.qth_lon    = rconf.qth_lon;
+                pic_config_recompute_viewport();
+                printf("display: center_lon=%.1f map_zoom=%.0f%% "
+                       "view_center=(%.2f,%.2f) span=(%.1f,%.1f)°\n",
+                       rconf.center_lon, rconf.map_zoom * 100.0,
+                       pic_config.view_center_lat,
+                       pic_config.view_center_lon,
+                       pic_config.view_span_lat,
+                       pic_config.view_span_lon);
 
                 /* Update timezone from QTH */
                 {
@@ -2136,18 +2153,18 @@ int pic_display_run(const char *maps_dir, int width, int height)
         goto cleanup;
     }
 
-    /* Load map images */
+    /* Load map images.
+     *
+     * The SDL path is only used for dev on desktop hosts where RAM
+     * is abundant — always opt into the 4k source for zoom headroom. */
     res = get_resolution_suffix(height);
     printf("display: loading maps at %s resolution...\n", res);
 
     if (maps_dir) {
-        snprintf(path, sizeof(path), "%s/black_marble/black_marble_%s.jpg",
-                 maps_dir, res);
-        black_marble = pic_image_load_scaled(path, width, height);
-
-        snprintf(path, sizeof(path), "%s/blue_marble/blue_marble_%s.jpg",
-                 maps_dir, res);
-        blue_marble = pic_image_load_scaled(path, width, height);
+        black_marble = pic_map_load(maps_dir, "black_marble",
+                                    "black_marble", width, height, 1);
+        blue_marble = pic_map_load(maps_dir, "blue_marble",
+                                   "blue_marble", width, height, 1);
 
         snprintf(path, sizeof(path), "%s/borders.dat", maps_dir);
         if (pic_borders_load(path, &borders) == 0) {

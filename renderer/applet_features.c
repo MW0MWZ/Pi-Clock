@@ -14,48 +14,96 @@
 #include <string.h>
 
 /*
- * friendly_name - Map internal layer/applet names to display labels.
+ * Layer / applet display order + labels.
+ *
+ * Both arrays MUST match dashboard/internal/api/handlers.go's
+ * layerDefs and appletDefs (same names in the same order). The
+ * on-screen Active Features panel walks these arrays in order
+ * and looks each one up in the live stack — so the user sees
+ * the same ordering and wording on the Pi as in the web UI.
+ *
+ * Layers in the live stack are added in *render* order (bottom
+ * to top: basemap, daylight, ...) which is not the same as the
+ * UI's reading order (Day Map first, then Night Map, etc.). The
+ * lookup-by-name decoupling lets the two stay independent.
  */
-static const char *friendly_name(const char *name)
+static const struct { const char *key; const char *label; } layer_order[] = {
+    {"daylight",      "Day Map"},
+    {"basemap",       "Night Map"},
+    {"borders",       "Country Borders"},
+    {"grid",          "Lat/Lon Grid"},
+    {"timezone",      "Time Zones"},
+    {"cqzone",        "CQ Zones"},
+    {"ituzone",       "ITU Zones"},
+    {"maidenhead",    "Maidenhead Grid"},
+    {"bandconditions","Propagation Prediction"},
+    {"dxspots",       "DX Cluster Spots"},
+    {"satellites",    "Satellite Tracker"},
+    {"lightning",     "Lightning Strikes"},
+    {"earthquakes",   "Earthquakes"},
+    {"precip",        "Rain Radar"},
+    {"cloud",         "Cloud Cover"},
+    {"wind",          "Wind"},
+    {"aurora",        "Aurora"},
+    {"qth",           "Home QTH Marker"},
+    {"sun",           "Sun Position"},
+    {"moon",          "Moon Position"},
+    {"ticker",        "News Ticker"},
+    {"hud",           "Clock / HUD"},
+    {NULL, NULL}
+};
+
+static const struct { const char *key; const char *label; } applet_order[] = {
+    {"dxfeed",        "DX Cluster Feed"},
+    {"muf",           "MUF Estimate"},
+    {"voacap",        "Propagation Prediction"},
+    {"solar",         "Solar Weather"},
+    {"sysinfo",       "System Info"},
+    {"features",      "Active Features"},
+    {NULL, NULL}
+};
+
+/*
+ * is_layer_enabled - Look up `name` in the live layer stack and
+ * return its enabled flag, or 0 if not present.
+ */
+static int is_layer_enabled(pic_layer_stack_t *stack, const char *name)
 {
-    static const struct { const char *key; const char *label; } names[] = {
-        /* Layers */
-        {"basemap",    "Base Map"},
-        {"daylight",   "Daylight"},
-        {"borders",    "Borders"},
-        {"grid",       "Lat/Lon Grid"},
-        {"timezone",   "Time Zones"},
-        {"cqzone",     "CQ Zones"},
-        {"ituzone",    "ITU Zones"},
-        {"maidenhead", "Maidenhead"},
-        {"bandconditions","Propagation Map"},
-        {"dxspots",    "DX Spots"},
-        {"satellites", "Satellites"},
-        {"lightning",  "Lightning"},
-        {"earthquakes","Earthquakes"},
-        {"precip",     "Rain Radar"},
-        {"cloud",      "Cloud Cover"},
-        {"wind",       "Wind"},
-        {"aurora",     "Aurora"},
-        {"qth",        "Home QTH"},
-        {"sun",        "Sun"},
-        {"moon",       "Moon"},
-        {"ticker",     "News Ticker"},
-        {"hud",        "Clock / HUD"},
-        /* Applets */
-        {"dxfeed",     "DX Feed"},
-        {"muf",        "MUF Estimate"},
-        {"voacap",     "Propagation Prediction"},
-        {"solar",      "Solar Weather"},
-        {"sysinfo",    "System Info"},
-        {"features",   "Features"},
-        {NULL, NULL}
-    };
     int i;
-    for (i = 0; names[i].key; i++) {
-        if (strcmp(name, names[i].key) == 0) return names[i].label;
+    for (i = 0; i < stack->count; i++) {
+        if (strcmp(stack->layers[i].name, name) == 0) {
+            return stack->layers[i].enabled;
+        }
     }
-    return name;
+    return 0;
+}
+
+/*
+ * applet_label - Look up the dashboard-friendly label for `name`.
+ * Falls back to whatever label the live applet has if it isn't
+ * listed in applet_order (defensive for future renames).
+ */
+static const char *applet_label(const char *name, const char *fallback)
+{
+    int i;
+    for (i = 0; applet_order[i].key; i++) {
+        if (strcmp(name, applet_order[i].key) == 0) {
+            return applet_order[i].label;
+        }
+    }
+    return fallback;
+}
+
+/*
+ * count_enabled_applets - Total enabled across both sides.
+ */
+static int count_enabled_applets(pic_applet_stack_t *stack)
+{
+    int i, n = 0;
+    for (i = 0; i < stack->count; i++) {
+        if (stack->applets[i].enabled) n++;
+    }
+    return n;
 }
 
 /*
@@ -81,13 +129,15 @@ double pic_applet_render_features(cairo_t *cr, double width,
     layers = info->layer_stack;
     applets = (pic_applet_stack_t *)info->applet_stack;
 
-    /* Total height: title + separator + layers header + items + applets header + items */
+    /* Total height: title + separator + layers header + items + applets header + items.
+     * Layer count walks the dashboard-defined display order; applet
+     * count walks the live stack since applet ordering is dynamic
+     * (user drag-and-drop in the dashboard). */
     {
-        int layer_enabled = 0, applet_enabled = 0;
-        for (i = 0; i < layers->count; i++)
-            if (layers->layers[i].enabled) layer_enabled++;
-        for (i = 0; i < applets->count; i++)
-            if (applets->applets[i].enabled) applet_enabled++;
+        int layer_enabled = 0, applet_enabled;
+        for (i = 0; layer_order[i].key; i++)
+            if (is_layer_enabled(layers, layer_order[i].key)) layer_enabled++;
+        applet_enabled = count_enabled_applets(applets);
 
         double total_h = fs * 2.0;  /* title + separator */
         total_h += line_h;          /* "Layers" header */
@@ -137,8 +187,10 @@ double pic_applet_render_features(cairo_t *cr, double width,
 
     {
         int any = 0;
-        for (i = 0; i < layers->count; i++) {
-            if (!layers->layers[i].enabled) continue;
+        /* Iterate the dashboard-defined order so the user sees the
+         * same layer ordering on the screen as in the web UI. */
+        for (i = 0; layer_order[i].key; i++) {
+            if (!is_layer_enabled(layers, layer_order[i].key)) continue;
             any = 1;
 
             /* Green dot + name */
@@ -148,7 +200,7 @@ double pic_applet_render_features(cairo_t *cr, double width,
 
             cairo_set_source_rgba(cr, 0.85, 0.85, 0.85, 0.9);
             cairo_move_to(cr, fs * 0.7, y);
-            cairo_show_text(cr, friendly_name(layers->layers[i].name));
+            cairo_show_text(cr, layer_order[i].label);
             y += line_h;
         }
         if (!any) {
@@ -159,12 +211,16 @@ double pic_applet_render_features(cairo_t *cr, double width,
         }
     }
 
-    /* Applets section — only show if any are enabled */
+    /* Applets section — only show if any are enabled.
+     *
+     * Reading order on screen: left column top-to-bottom, then
+     * right column top-to-bottom. The live applet stack stores
+     * stack-order (== top-to-bottom on each side) plus a side
+     * tag, so we iterate it twice — first emitting LEFT, then
+     * RIGHT — to mirror what the user actually sees on the Pi
+     * display. */
     {
-        int any = 0;
-        for (i = 0; i < applets->count; i++) {
-            if (applets->applets[i].enabled) { any = 1; break; }
-        }
+        int any = (count_enabled_applets(applets) > 0);
         if (any) {
             y += line_h * 0.4;
 
@@ -182,17 +238,28 @@ double pic_applet_render_features(cairo_t *cr, double width,
                                    CAIRO_FONT_WEIGHT_NORMAL);
             cairo_set_font_size(cr, fs * 0.9);
 
-            for (i = 0; i < applets->count; i++) {
-                if (!applets->applets[i].enabled) continue;
+            /* Two passes: LEFT side first (in stack order), then RIGHT.
+             * Stack index order = visual top-to-bottom on each side,
+             * so this gives a "read the left column, then the right
+             * column" sequence matching the on-screen layout. */
+            int pass;
+            for (pass = 0; pass < 2; pass++) {
+                int wanted_side = (pass == 0) ? APPLET_SIDE_LEFT
+                                              : APPLET_SIDE_RIGHT;
+                for (i = 0; i < applets->count; i++) {
+                    pic_applet_t *a = &applets->applets[i];
+                    if (!a->enabled) continue;
+                    if (a->side != wanted_side) continue;
 
-                cairo_set_source_rgba(cr, 0.3, 0.7, 0.95, 0.9);
-                cairo_arc(cr, fs * 0.3, y - fs * 0.2, fs * 0.15, 0, 6.283);
-                cairo_fill(cr);
+                    cairo_set_source_rgba(cr, 0.3, 0.7, 0.95, 0.9);
+                    cairo_arc(cr, fs * 0.3, y - fs * 0.2, fs * 0.15, 0, 6.283);
+                    cairo_fill(cr);
 
-                cairo_set_source_rgba(cr, 0.85, 0.85, 0.85, 0.9);
-                cairo_move_to(cr, fs * 0.7, y);
-                cairo_show_text(cr, friendly_name(applets->applets[i].name));
-                y += line_h;
+                    cairo_set_source_rgba(cr, 0.85, 0.85, 0.85, 0.9);
+                    cairo_move_to(cr, fs * 0.7, y);
+                    cairo_show_text(cr, applet_label(a->name, a->label));
+                    y += line_h;
+                }
             }
         }
     }

@@ -38,6 +38,8 @@
 static cairo_surface_t *aurora_cache = NULL;
 static int aurora_cache_w = 0, aurora_cache_h = 0;
 static time_t aurora_cache_time = 0;
+/* Viewport generation baked into the cached surface. */
+static unsigned int aurora_cache_viewport_gen = 0;
 
 /*
  * aurora_pixel - Map aurora probability to a pre-multiplied ARGB pixel.
@@ -123,6 +125,7 @@ void pic_layer_render_aurora(cairo_t *cr, int width, int height,
     }
 
     if (fetched != aurora_cache_time) need_redraw = 1;
+    if (pic_config.viewport_gen != aurora_cache_viewport_gen) need_redraw = 1;
 
     if (!need_redraw) {
         cairo_set_source_surface(cr, aurora_cache, 0, 0);
@@ -133,7 +136,7 @@ void pic_layer_render_aurora(cairo_t *cr, int width, int height,
     {
         cairo_surface_t *grid_surf;
         unsigned int *pixels;
-        int stride, gy, gx, center_off;
+        int stride, gy, gx;
         cairo_t *cc;
 
         grid_surf = cairo_image_surface_create(
@@ -147,40 +150,35 @@ void pic_layer_render_aurora(cairo_t *cr, int width, int height,
         pixels = (unsigned int *)cairo_image_surface_get_data(grid_surf);
         stride = cairo_image_surface_get_stride(grid_surf) / 4;
 
-        center_off = (int)(pic_config.center_lon);
-        if (center_off < 0) center_off += 360;
-
+        /* Raw lat/lon grid: column 0 = lon -180°, row 0 = lat +90°.
+         * pic_paint_viewport applies the pan + zoom transform below. */
         pthread_mutex_lock(&data->mutex);
 
         for (gy = 0; gy < PIC_AURORA_NY; gy++) {
             for (gx = 0; gx < PIC_AURORA_NX; gx++) {
-                int src_col = (gx + center_off) % PIC_AURORA_NX;
                 pixels[gy * stride + gx] =
-                    aurora_pixel(data->prob[gy][src_col]);
+                    aurora_pixel(data->prob[gy][gx]);
             }
         }
 
         pthread_mutex_unlock(&data->mutex);
         cairo_surface_mark_dirty(grid_surf);
 
-        /* Scale up with bilinear filtering for smooth aurora edges */
+        /* Paint grid through the current viewport — bilinear filter
+         * in pic_paint_viewport keeps aurora edges smooth at any zoom. */
         cc = cairo_create(aurora_cache);
         cairo_set_operator(cc, CAIRO_OPERATOR_CLEAR);
         cairo_paint(cc);
         cairo_set_operator(cc, CAIRO_OPERATOR_OVER);
 
-        cairo_scale(cc,
-                    (double)width / PIC_AURORA_NX,
-                    (double)height / PIC_AURORA_NY);
-        cairo_set_source_surface(cc, grid_surf, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(cc),
-                                 CAIRO_FILTER_BILINEAR);
-        cairo_paint(cc);
+        pic_paint_viewport(cc, grid_surf, width, height);
 
         cairo_destroy(cc);
         cairo_surface_destroy(grid_surf);
         aurora_cache_time = fetched;
-        printf("aurora: overlay cached (bilinear)\n");
+        aurora_cache_viewport_gen = pic_config.viewport_gen;
+        printf("aurora: overlay cached (viewport gen=%u)\n",
+               aurora_cache_viewport_gen);
     }
 
     cairo_set_source_surface(cr, aurora_cache, 0, 0);

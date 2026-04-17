@@ -53,10 +53,12 @@ void pic_layer_render_maidenhead(cairo_t *cr, int width, int height,
         double lon_deg = -180.0 + lon_field * 20.0;
         double x = pic_lon_to_x(lon_deg, width);
 
-        /* Vertical field boundary — dashed green line */
+        /* Vertical field boundary — dashed green line.
+         * Alpha bumped 0.2 -> 0.8 and colour brightened so the
+         * grid reads clearly against both land and ocean. */
         cairo_set_dash(cr, dashes, 2, 0);
-        cairo_set_source_rgba(cr, 0.3, 0.8, 0.3, 0.2);
-        cairo_set_line_width(cr, 0.5);
+        cairo_set_source_rgba(cr, 0.4, 1.0, 0.4, 0.8);
+        cairo_set_line_width(cr, 0.8);
         cairo_move_to(cr, x, 0);
         cairo_line_to(cr, x, height);
         cairo_stroke(cr);
@@ -66,11 +68,12 @@ void pic_layer_render_maidenhead(cairo_t *cr, int width, int height,
             double lat_deg = -90.0 + lat_field * 10.0;
             double y = pic_lat_to_y(lat_deg, height);
 
-            /* Horizontal boundary — only draw once per lat_field */
+            /* Horizontal boundary — only draw once per lat_field.
+             * Matches the vertical-boundary style above. */
             if (lon_field == 0) {
                 cairo_set_dash(cr, dashes, 2, 0);
-                cairo_set_source_rgba(cr, 0.3, 0.8, 0.3, 0.2);
-                cairo_set_line_width(cr, 0.5);
+                cairo_set_source_rgba(cr, 0.4, 1.0, 0.4, 0.8);
+                cairo_set_line_width(cr, 0.8);
                 cairo_move_to(cr, 0, y);
                 cairo_line_to(cr, width, y);
                 cairo_stroke(cr);
@@ -78,9 +81,10 @@ void pic_layer_render_maidenhead(cairo_t *cr, int width, int height,
             }
 
             /* Draw the 2-character field label at the centre of
-             * each grid square. Only draw every other square to
-             * avoid excessive clutter at world scale. */
-            if ((lon_field + lat_field) % 2 == 0) {
+             * every grid square. (Earlier versions skipped every
+             * other square to reduce clutter, but with the brighter
+             * grid lines the full 18x18 set reads cleanly.) */
+            {
                 char label[4];
                 double cx, cy;
 
@@ -92,7 +96,7 @@ void pic_layer_render_maidenhead(cairo_t *cr, int width, int height,
                 cx = pic_lon_to_x(lon_deg + 10.0, width);
                 cy = pic_lat_to_y(lat_deg + 5.0, height);
 
-                cairo_set_source_rgba(cr, 0.3, 0.8, 0.3, 0.3);
+                cairo_set_source_rgba(cr, 0.3, 0.8, 0.3, 0.75);
                 cairo_move_to(cr, cx - font_size * 0.6, cy + font_size * 0.3);
                 cairo_show_text(cr, label);
             }

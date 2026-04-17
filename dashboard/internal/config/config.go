@@ -19,6 +19,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -30,6 +31,10 @@ const (
 // RendererConfig holds the display and station settings.
 // Always used as a pointer. The mutex protects all fields from
 // concurrent reads (template rendering) and writes (API handlers).
+//
+// MapZoom is a 0-100 percent slider controlling how far the
+// viewport is zoomed and panned toward the QTH — see pic_config
+// in renderer/config.h for the full semantics.
 type RendererConfig struct {
 	mu sync.RWMutex // guards all fields below
 
@@ -39,6 +44,7 @@ type RendererConfig struct {
 	Callsign          string `json:"callsign"`
 	GridSquare        string `json:"grid_square"`
 	DisplayResolution string `json:"display_resolution"`
+	MapZoom           string `json:"map_zoom"`
 }
 
 // Load reads the renderer config file and returns a RendererConfig.
@@ -50,6 +56,7 @@ func Load() *RendererConfig {
 		Callsign:          "",
 		GridSquare:        "",
 		DisplayResolution: "1080p",
+		MapZoom:           "0",
 	}
 
 	cfg.Reload()
@@ -93,6 +100,8 @@ func (c *RendererConfig) Reload() {
 			c.Callsign = val
 		case "GRID_SQUARE":
 			c.GridSquare = val
+		case "MAP_ZOOM":
+			c.MapZoom = val
 		case "DISPLAY_RESOLUTION":
 			// Migrate legacy "native" value (removed in favour of explicit
 			// 1080p/720p/1440p/4k choices — native auto-detect never worked
@@ -115,6 +124,7 @@ func (c *RendererConfig) saveUnlocked() error {
 	managed := map[string]bool{
 		"CENTER_LON": true, "QTH_LAT": true, "QTH_LON": true,
 		"CALLSIGN": true, "GRID_SQUARE": true, "DISPLAY_RESOLUTION": true,
+		"MAP_ZOOM": true,
 	}
 
 	var extra []string
@@ -139,7 +149,9 @@ QTH_LON=%s
 CALLSIGN=%s
 GRID_SQUARE=%s
 DISPLAY_RESOLUTION=%s
-`, c.CenterLon, c.QthLat, c.QthLon, c.Callsign, c.GridSquare, c.DisplayResolution)
+MAP_ZOOM=%s
+`, c.CenterLon, c.QthLat, c.QthLon, c.Callsign, c.GridSquare,
+		c.DisplayResolution, c.MapZoom)
 
 	for _, line := range extra {
 		content += line + "\n"
@@ -180,6 +192,7 @@ func (c *RendererConfig) Snapshot() RendererConfig {
 		Callsign:          c.Callsign,
 		GridSquare:        c.GridSquare,
 		DisplayResolution: c.DisplayResolution,
+		MapZoom:           c.MapZoom,
 	}
 }
 
@@ -215,6 +228,23 @@ func (c *RendererConfig) Update(values map[string]string) error {
 	}
 	if v, ok := values["display_resolution"]; ok {
 		c.DisplayResolution = v
+	}
+	if v, ok := values["map_zoom"]; ok {
+		// Validate as 0..100 integer — the renderer parses MAP_ZOOM
+		// as a float but the slider is integer-stepped. Clamp and
+		// reject garbage so we never write a non-numeric value that
+		// would break the shell-sourced init script.
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("map_zoom: not an integer")
+		}
+		if n < 0 {
+			n = 0
+		}
+		if n > 100 {
+			n = 100
+		}
+		c.MapZoom = strconv.Itoa(n)
 	}
 
 	return c.saveUnlocked()

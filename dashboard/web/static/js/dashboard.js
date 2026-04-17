@@ -347,6 +347,15 @@ function loadSystemInfo() {
 }
 
 // ── Save display config ─────────────────────────────────────
+/*
+ * saveConfig — write Display Settings + Station Settings.
+ *
+ * map_zoom is intentionally NOT in the PUT body: the Map Zoom
+ * slider auto-saves on its own via setupMapZoom (PUT /api/config
+ * with just {map_zoom: N}). Sending it from here would race the
+ * slider's last-value write and could overwrite an in-flight
+ * change. The Go handler tolerates either field being absent.
+ */
 function saveConfig() {
     var lat = parseFloat(val('qth_lat'));
     var lon = parseFloat(val('qth_lon'));
@@ -1594,5 +1603,42 @@ document.addEventListener('DOMContentLoaded', function() {
         if (layerState.ticker) loadTickerSources();
     });
 
+    setupMapZoom();
+
     setInterval(loadSystemInfo, 30000);
 });
+
+/*
+ * setupMapZoom — wire the Map Zoom slider.
+ *
+ * The slider element is static HTML (see dashboard.html, "Map Zoom" row)
+ * seeded from the renderer config on page render. We add two listeners:
+ *
+ *   input  — update the % label in real time as the user drags
+ *   change — save (PUT /api/config) on release, which triggers the
+ *            renderer's /tmp/pi-clock-reload path to apply the zoom
+ *
+ * Debouncing via the "change" event (fired on release) avoids hammering
+ * the API with one request per pixel. Keyboard users get one save per
+ * arrow-key press, which is also fine.
+ */
+function setupMapZoom() {
+    var slider = document.getElementById('map_zoom');
+    var label  = document.getElementById('map_zoom_val');
+    if (!slider || !label) return;
+
+    slider.addEventListener('input', function() {
+        /* The "%" is rendered by the template (see dashboard.html),
+         * so this only writes the numeric value. */
+        label.textContent = this.value;
+    });
+
+    slider.addEventListener('change', function() {
+        var val = this.value;
+        apiCall('PUT', '/api/config', { map_zoom: val }).then(function() {
+            toast('Zoom: ' + val + '%');
+        }).catch(function() {
+            toast('Failed to save zoom', 'error');
+        });
+    });
+}

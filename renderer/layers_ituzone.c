@@ -33,14 +33,15 @@ void pic_layer_render_ituzone(cairo_t *cr, int width, int height,
         return;
     }
 
-    half_width = width / 2.0;
+    half_width = pic_wrap_threshold_px(width);
     font_size = height / 90.0;
 
     /* Draw ITU Zone boundaries as dashed cyan lines.
      * Slightly thinner than CQ zones and with a different dash
      * pattern so both can be enabled simultaneously. */
     cairo_set_dash(cr, dashes, 2, 0);
-    cairo_set_source_rgba(cr, 0.2, 0.8, 0.9, 0.40);
+    /* Cyan dash — alpha set high enough to read against bright land. */
+    cairo_set_source_rgba(cr, 0.2, 0.8, 0.9, 0.6);
     cairo_set_line_width(cr, 1.0);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
 

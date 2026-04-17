@@ -41,7 +41,7 @@ void pic_layer_render_borders(cairo_t *cr, int width, int height,
 {
     pic_borders_t *borders = (pic_borders_t *)user_data;
     uint32_t i;
-    double half_width;
+    double wrap_px;
 
     (void)now; /* Borders don't change with time */
 
@@ -49,10 +49,14 @@ void pic_layer_render_borders(cairo_t *cr, int width, int height,
         return;
     }
 
-    half_width = width / 2.0;
+    /* Pixel distance above which two consecutive points are on
+     * opposite sides of the longitudinal seam — scales with zoom. */
+    wrap_px = pic_wrap_threshold_px(width);
 
-    /* Set line style: thin, semi-transparent white */
-    cairo_set_source_rgba(cr, 0.8, 0.8, 0.6, 0.35);
+    /* Near-white, high-alpha line — borders are the visual key to
+     * the map and need to dominate the basemap, especially over
+     * bright land and sunlit ocean. */
+    cairo_set_source_rgba(cr, 1.0, 1.0, 0.85, 0.9);
     cairo_set_line_width(cr, 0.8);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
 
@@ -88,7 +92,7 @@ void pic_layer_render_borders(cairo_t *cr, int width, int height,
              * than half a screen width apart horizontally, the line
              * would cross the seam. Break the line instead.
              */
-            if (fabs(x - prev_x) > half_width) {
+            if (fabs(x - prev_x) > wrap_px) {
                 cairo_move_to(cr, x, y);
             } else {
                 cairo_line_to(cr, x, y);

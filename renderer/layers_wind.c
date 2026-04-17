@@ -100,6 +100,12 @@
 static cairo_surface_t *wind_cache = NULL;
 static int wind_cache_w = 0, wind_cache_h = 0;
 static time_t wind_cache_ref = 0;  /* ref_time of cached data */
+/* Viewport generation baked into the cached streamlines. The trace
+ * points themselves are in lat/lon, but each trace is projected to
+ * screen once via pic_lon_to_x/pic_lat_to_y and the resulting cubic
+ * Béziers are rasterised into the cache — so a viewport change
+ * requires re-projecting (and re-rasterising) every streamline. */
+static unsigned int wind_cache_viewport_gen = 0;
 
 /* Simple pseudo-random number generator — deterministic so the
  * streamline pattern is stable between identical data sets.
@@ -197,7 +203,10 @@ static double speed_to_brightness(double speed)
 {
     double norm = speed / WIND_STRONG;
     if (norm > 1.0) norm = 1.0;
-    return 0.15 + 0.75 * sqrt(norm);
+    /* Two-stage dimming so streamlines don't overpower the 4K basemap:
+     * inner 0.75 caps the sqrt curve at 0.90 max, outer 0.75 brings
+     * the ceiling to ~0.68. Floor is ~0.11 (calm wind, dim trail). */
+    return (0.15 + 0.75 * sqrt(norm)) * 0.75;
 }
 
 /*
@@ -287,11 +296,12 @@ static void render_streamlines(cairo_t *cr, int width, int height,
             double sx[TRACE_STEPS_MAX + 1];
             double sy[TRACE_STEPS_MAX + 1];
             int skip = 0;
+            double wrap_px = pic_wrap_threshold_px(width);
 
             for (t = 0; t < valid_steps; t++) {
                 sx[t] = pic_lon_to_x(trace_lon[t], width);
                 sy[t] = pic_lat_to_y(trace_lat[t], height);
-                if (t > 0 && fabs(sx[t] - sx[t-1]) > width / 2.0)
+                if (t > 0 && fabs(sx[t] - sx[t-1]) > wrap_px)
                     skip = 1;
             }
             if (skip) continue;
@@ -410,6 +420,11 @@ void pic_layer_render_wind(cairo_t *cr, int width, int height,
     if (ref != wind_cache_ref) {
         need_redraw = 1;
     }
+    /* Or if the viewport changed — all traces were projected with
+     * the old viewport and are now stale. */
+    if (pic_config.viewport_gen != wind_cache_viewport_gen) {
+        need_redraw = 1;
+    }
 
     if (need_redraw) {
         cairo_t *cc = cairo_create(wind_cache);
@@ -429,8 +444,10 @@ void pic_layer_render_wind(cairo_t *cr, int width, int height,
         pthread_mutex_unlock(&data->mutex);
 
         wind_cache_ref = ref;
+        wind_cache_viewport_gen = pic_config.viewport_gen;
         cairo_destroy(cc);
-        printf("wind: streamlines cached\n");
+        printf("wind: streamlines cached (viewport gen=%u)\n",
+               wind_cache_viewport_gen);
     }
 
     /* Paint cached surface */

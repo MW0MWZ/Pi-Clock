@@ -34,7 +34,9 @@ void pic_layer_render_cqzone(cairo_t *cr, int width, int height,
         return;
     }
 
-    half_width = width / 2.0;
+    /* Pixel distance above which two consecutive points lie on
+     * opposite sides of the longitudinal seam — scales with zoom. */
+    half_width = pic_wrap_threshold_px(width);
     font_size = height / 80.0;
 
     /* Draw CQ Zone boundaries as dashed orange lines */

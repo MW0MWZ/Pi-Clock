@@ -190,10 +190,22 @@ static void compute_prop_grid(double qth_lat, double qth_lon,
             if (freq < 5.0) rel *= 0.45;
 
             /* Antenna gain factor — dBi converted to linear.
-             * Positive gain extends coverage, negative shrinks it.
-             * Applied as a power ratio adjustment to reliability. */
-            if (ant_gain_dbi != 0.0) {
-                double gain_linear = pow(10.0, ant_gain_dbi / 10.0);
+             *
+             * A -10 dB reality offset is baked in so the dashboard's
+             * "0 dBi" corresponds to a -10 dB effective gain. The
+             * default 100 W dipole + real-world-losses model (see
+             * propagation.c threshold comment) proved ~10 dB too
+             * optimistic compared to on-air observation; this
+             * cosmetic shift keeps the familiar -12..+12 dashboard
+             * slider while producing a propagation map that
+             * matches what operators actually hear.
+             *
+             * Applied as a power ratio adjustment to reliability.
+             * sqrt() because the receive-side gain affects only
+             * half of the link budget. */
+            {
+                double effective_dbi = ant_gain_dbi - 10.0;
+                double gain_linear = pow(10.0, effective_dbi / 10.0);
                 rel *= (gain_linear > 0.01) ? sqrt(gain_linear) : 0.0;
             }
 

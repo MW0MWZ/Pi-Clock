@@ -95,12 +95,13 @@ void pic_layer_render_grid(cairo_t *cr, int width, int height,
     for (lon = -180; lon <= 180; lon += GRID_INTERVAL) {
         x = pic_lon_to_x((double)lon, width);
 
-        /* All grid lines use the same style — major/minor only */
+        /* All grid lines use the same style — major/minor only.
+         * Alphas tuned for legibility at 4K against bright land. */
         if (lon % 30 == 0) {
-            cairo_set_source_rgba(cr, 0.7, 0.7, 0.7, 0.25);
+            cairo_set_source_rgba(cr, 0.7, 0.7, 0.7, 0.5);
             cairo_set_line_width(cr, 0.8);
         } else {
-            cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.25);
+            cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.4);
             cairo_set_line_width(cr, 0.5);
         }
 
@@ -117,7 +118,7 @@ void pic_layer_render_grid(cairo_t *cr, int width, int height,
                 snprintf(label, sizeof(label), "%dW", -lon);
             }
 
-            cairo_set_source_rgba(cr, 0.8, 0.8, 0.8, 0.5);
+            cairo_set_source_rgba(cr, 0.8, 0.8, 0.8, 0.7);
             cairo_move_to(cr, x + 3, height - font_size * 0.5);
             cairo_show_text(cr, label);
         }
@@ -132,12 +133,11 @@ void pic_layer_render_grid(cairo_t *cr, int width, int height,
     for (lat = -90; lat <= 90; lat += GRID_INTERVAL) {
         y = pic_lat_to_y((double)lat, height);
 
-        /* All grid lines use the same style — major/minor only */
         if (lat % 30 == 0) {
-            cairo_set_source_rgba(cr, 0.7, 0.7, 0.7, 0.25);
+            cairo_set_source_rgba(cr, 0.7, 0.7, 0.7, 0.5);
             cairo_set_line_width(cr, 0.8);
         } else {
-            cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.25);
+            cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.4);
             cairo_set_line_width(cr, 0.5);
         }
 
@@ -154,7 +154,7 @@ void pic_layer_render_grid(cairo_t *cr, int width, int height,
                 snprintf(label, sizeof(label), "%dS", -lat);
             }
 
-            cairo_set_source_rgba(cr, 0.8, 0.8, 0.8, 0.5);
+            cairo_set_source_rgba(cr, 0.8, 0.8, 0.8, 0.7);
             cairo_move_to(cr, 5, y - font_size * 0.3);
             cairo_show_text(cr, label);
         }
@@ -171,7 +171,7 @@ void pic_layer_render_grid(cairo_t *cr, int width, int height,
         int i;
 
         cairo_set_dash(cr, dashes, 2, 0);
-        cairo_set_source_rgba(cr, 0.8, 0.6, 0.3, 0.3);
+        cairo_set_source_rgba(cr, 0.8, 0.6, 0.3, 0.5);
         cairo_set_line_width(cr, 0.8);
 
         for (i = 0; i < 4; i++) {

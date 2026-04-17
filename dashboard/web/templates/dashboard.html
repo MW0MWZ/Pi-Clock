@@ -95,6 +95,19 @@
                     </select>
                 </div>
             </div>
+            <!--
+                Map Zoom — full-width slider styled to match the antenna
+                gain slider in the Propagation card. Auto-saves on
+                release (change event) via /api/config rather than
+                requiring a Save Settings click, because zoom benefits
+                from immediate visual feedback. See dashboard.js/setupMapZoom.
+            -->
+            <div class="form-group mt-12">
+                <label for="map_zoom" title="Zooms the map toward your QTH. 0% = full world, 100% ≈ continent-plus-ocean view centred on your latitude.">Map Zoom: <span id="map_zoom_val">{{.Config.MapZoom}}</span>%</label>
+                <input type="range" id="map_zoom" min="0" max="100" step="1"
+                       value="{{.Config.MapZoom}}"
+                       style="width:100%; height:4px; accent-color:var(--accent)">
+            </div>
             <div class="mt-12">
                 <button class="btn btn-primary" onclick="saveConfig()">Save Settings</button>
             </div>
