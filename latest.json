@@ -1,7 +1,7 @@
 {
-  "version": "2026-04-16r6",
-  "date": "2026-04-16",
-  "image": "Pi-Clock-2026-04-16r6.img.xz",
-  "rootfs": "Pi-Clock-2026-04-16r6.rootfs.tar.xz",
-  "url": "https://github.com/MW0MWZ/Pi-Clock/releases/tag/v2026-04-16r6"
+  "version": "2026-04-17r0",
+  "date": "2026-04-17",
+  "image": "Pi-Clock-2026-04-17r0.img.xz",
+  "rootfs": "Pi-Clock-2026-04-17r0.rootfs.tar.xz",
+  "url": "https://github.com/MW0MWZ/Pi-Clock/releases/tag/v2026-04-17r0"
 }
