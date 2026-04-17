@@ -11,12 +11,35 @@
         :root {
             --pic-gold: #c9a84c;
             --pic-gold-light: #dbb85c;
+            --pic-red: #cc2936;
             --text-light: #e8e0d4;
             --text-muted: #9a8e80;
             --bg-dark: #2e2c2a;
             --bg-card: #3a3a3a;
             --border-color: #504a46;
             --input-bg: #333030;
+        }
+
+        /* ── Icon system ──────────────────────────────────────
+         * Shared /icons.svg sprite, matching the dashboard and
+         * the rest of the gh-pages site. Stroke-only, colour
+         * inherited, sized in em. */
+        .icon {
+            width: 1em;
+            height: 1em;
+            vertical-align: -0.125em;
+            flex-shrink: 0;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .icon-heart {
+            color: var(--pic-red);
+            fill: currentColor;
+            stroke: none;
         }
 
         body {
@@ -628,7 +651,7 @@
         </div>
 
         <footer>
-            <p style="margin-bottom: 6px;">Built with &#10084;&#65039; for the Amateur Radio community by Andy Taylor (MW0MWZ)</p>
+            <p style="margin-bottom: 6px;">Built with <svg class="icon icon-heart" aria-label="love"><use href="/icons.svg#icon-heart"/></svg> for the Amateur Radio community by Andy Taylor (MW0MWZ)</p>
             <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
             <p style="margin-top: 6px;">
                 <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>

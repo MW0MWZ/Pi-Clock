@@ -6,6 +6,24 @@
 /* ── Reset & variables ───────────────────────────────────────────── */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ── Icon system ─────────────────────────────────────────────────── */
+/* Inline SVG icons referenced from /icons.svg (site root). Matches
+ * the dashboard icon convention so the public site and the on-device
+ * UI share one consistent visual language. Strokes use currentColor
+ * so each icon inherits the surrounding text colour; set the parent's
+ * font-size to scale, or override width/height for specific slots. */
+.icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 :root {
     --pic-gold:         #c9a84c;
     --pic-gold-light:   #dbb85c;
@@ -213,9 +231,16 @@ strong { color: #fff; }
     text-decoration: none;
 }
 
+/* Section icon on the manual contents grid. A dedicated block so
+ * the icon sits above the heading with a little breathing room.
+ * 2.5em drives the .icon 1em sizing; the gold accent matches the
+ * brand palette and picks up against the dark card background. */
 .grid-card .icon {
-    font-size: 1.6em;
-    margin-bottom: 8px;
+    display: block;
+    font-size: 2.5em;
+    color: var(--pic-accent);
+    margin-bottom: 12px;
+    stroke-width: 1.8;  /* thinner than the 2px default — scales well at this size */
 }
 
 .grid-card h3 {
@@ -496,6 +521,15 @@ tr:hover td {
     opacity: 0.3;
 }
 
+/* Filled red heart used in the "built with love" footer line.
+ * The default .icon stroke-only presentation is too subtle inline
+ * with muted-grey text, so fill it and tint with the brand red. */
+.icon-heart {
+    color: var(--pic-red);
+    fill: currentColor;
+    stroke: none;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 768px) {
     .page-header h1 { font-size: 1.7em; }
@@ -509,11 +543,16 @@ tr:hover td {
 
 /* ── Mobile nav toggle (hamburger) ───────────────────────────────── */
 .nav-toggle {
+    /* Flex so the inline SVG sits centred. The button itself is
+     * hidden above 640px — see the media query below — so these
+     * styles only apply on narrow viewports. */
     display: none;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     color: var(--text-light);
-    font-size: 1.4em;
+    font-size: 1.5em;
     cursor: pointer;
     padding: 4px 8px;
     margin-left: auto;
@@ -521,7 +560,7 @@ tr:hover td {
 
 @media (max-width: 640px) {
     .topnav-links { display: none; }
-    .nav-toggle { display: block; }
+    .nav-toggle { display: inline-flex; }
     .container { padding: 0 16px 40px; }
     .topnav-links.open {
         display: flex;

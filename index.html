@@ -13,6 +13,30 @@
             box-sizing: border-box;
         }
 
+        /* ── Icon system ──────────────────────────────────────
+         * Inline SVG icons via the shared /icons.svg sprite.
+         * Stroke-only Lucide set; colour inherits from parent,
+         * size from parent font-size (1em × 1em). Matches the
+         * dashboard and manual. */
+        .icon {
+            width: 1em;
+            height: 1em;
+            vertical-align: -0.125em;
+            flex-shrink: 0;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* Filled red heart for the "built with love" footer. */
+        .icon-heart {
+            color: var(--pic-red);
+            fill: currentColor;
+            stroke: none;
+        }
+
         :root {
             --pic-gold: #c9a84c;
             --pic-gold-light: #dbb85c;
@@ -171,9 +195,15 @@
             box-shadow: 0 12px 24px rgba(0,0,0,0.3);
         }
 
+        /* Feature block icon. Gold accent and a slightly thinner
+         * stroke (than the 2px default) so the glyph reads
+         * clearly at 2.5em without looking heavy. */
         .feature-icon {
-            font-size: 1.8em;
-            margin-bottom: 10px;
+            display: block;
+            font-size: 2.5em;
+            color: var(--pic-gold);
+            margin-bottom: 12px;
+            stroke-width: 1.8;
         }
 
         .feature-card h3 {
@@ -525,32 +555,32 @@ sync</div>
         <h2 class="section-title">Features</h2>
         <div class="features">
             <div class="feature-card">
-                <div class="feature-icon">&#127758;</div>
+                <svg class="feature-icon icon" aria-hidden="true"><use href="/icons.svg#icon-globe"/></svg>
                 <h3>Real-time World Map</h3>
                 <p>NASA Blue Marble + Black Marble day/night blend with smooth greyline terminator. Beautiful at any resolution.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#128225;</div>
+                <svg class="feature-icon icon" aria-hidden="true"><use href="/icons.svg#icon-radio-tower"/></svg>
                 <h3>DX Cluster Integration</h3>
                 <p>Live DX spots with great circle arcs, band-coloured markers, and a scrolling feed panel. Multi-cluster support.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#128752;</div>
+                <svg class="feature-icon icon" aria-hidden="true"><use href="/icons.svg#icon-satellite"/></svg>
                 <h3>Satellite Tracking</h3>
                 <p>SGP4 orbit propagation for ISS, QO-100, and amateur satellites. Ground tracks, footprints, and live position.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#9728;&#65039;</div>
+                <svg class="feature-icon icon" aria-hidden="true"><use href="/icons.svg#icon-sun"/></svg>
                 <h3>Solar Weather</h3>
                 <p>Live NOAA SWPC data: SFI, Kp index, solar wind, X-ray flux. SDO sun images. Band condition predictions and MUF estimates.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#128240;</div>
+                <svg class="feature-icon icon" aria-hidden="true"><use href="/icons.svg#icon-newspaper"/></svg>
                 <h3>News Ticker</h3>
                 <p>Scrolling headlines from ARRL, RSGB, DX World, Southgate ARC, and NOAA space weather alerts.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#128421;&#65039;</div>
+                <svg class="feature-icon icon" aria-hidden="true"><use href="/icons.svg#icon-monitor"/></svg>
                 <h3>Web Dashboard</h3>
                 <p>Configure everything from your browser. Layer controls, DX filters, satellite selection, WiFi, and system management.</p>
             </div>
@@ -658,7 +688,7 @@ sync</div>
 
         <!-- Footer -->
         <footer>
-            <p style="margin-bottom: 6px;">Built with &#10084;&#65039; for the Amateur Radio community by Andy Taylor (MW0MWZ)</p>
+            <p style="margin-bottom: 6px;">Built with <svg class="icon icon-heart" aria-label="love"><use href="/icons.svg#icon-heart"/></svg> for the Amateur Radio community by Andy Taylor (MW0MWZ)</p>
             <p>&copy; 2026 Andy Taylor (MW0MWZ) &mdash; GPL-2.0</p>
             <p style="margin-top: 6px;">
                 <a href="https://github.com/MW0MWZ/Pi-Clock">GitHub</a>
