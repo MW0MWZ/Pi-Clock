@@ -28,7 +28,7 @@ maps/output/
 
 # Temporary files
 temp/
-CLAUDE.md
+**/CLAUDE.md
 Dockerfile
 renderer/pi-clock
 renderer/pi-clock-splash
