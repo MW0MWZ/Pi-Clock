@@ -135,11 +135,28 @@ install_update() {
 		die "no /boot/firmware in rootfs tarball"
 	fi
 
-	for f in "$MOUNT_DIR"/boot/firmware/kernel*.img \
-	         "$MOUNT_DIR"/boot/firmware/vmlinuz* \
-	         "$MOUNT_DIR"/boot/firmware/*.dtb; do
-		[ -f "$f" ] || continue
-		cp "$f" /boot/firmware/
+	# Mirror the ENTIRE boot firmware set from the new slot — kernel,
+	# dtbs, overlays AND the GPU firmware (start*.elf/fixup*.dat) — so the
+	# shared boot partition is self-consistent with this slot's kernel.
+	# Copying only kernel+dtb leaves stale firmware/overlays from a prior
+	# apk upgrade and breaks KMS (display) and brcmfmac (WiFi). The new
+	# image's kernel may be OLDER than what is currently booted, so this
+	# must REPLACE the set to match the slot (incl. downgrading firmware),
+	# not selectively copy "newer" files. Host-owned boot config lives only
+	# on the boot partition and is preserved.
+	for src in "$MOUNT_DIR"/boot/firmware/*; do
+		[ -e "$src" ] || continue
+		base=$(basename "$src")
+		case "$base" in
+			config.txt|cmdline.txt|slot.conf|pi-clock-config.txt|pi-clock-config.txt.sample)
+				continue ;;
+		esac
+		if [ -d "$src" ]; then
+			mkdir -p "/boot/firmware/$base"
+			cp -a "$src/." "/boot/firmware/$base/"
+		else
+			cp -a "$src" "/boot/firmware/$base"
+		fi
 	done
 
 	umount "$MOUNT_DIR"

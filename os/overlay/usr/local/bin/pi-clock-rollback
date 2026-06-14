@@ -44,15 +44,46 @@ trap cleanup EXIT
 
 mount -o ro "$PREV_DEV" "$PREV_MNT" || die "failed to mount $PREV_DEV"
 
-if [ ! -d "$PREV_MNT/boot/firmware" ]; then
-	die "no /boot/firmware in previous slot rootfs"
+if ! ls "$PREV_MNT"/boot/vmlinuz-* >/dev/null 2>&1; then
+	die "no kernel images (/boot/vmlinuz-*) in previous slot rootfs"
 fi
 
-for f in "$PREV_MNT"/boot/firmware/kernel*.img \
-         "$PREV_MNT"/boot/firmware/vmlinuz* \
-         "$PREV_MNT"/boot/firmware/*.dtb; do
-	[ -f "$f" ] || continue
-	cp "$f" /boot/firmware/
+# Reconstruct the boot set from the previous slot's INSTALLED kernel.
+#
+# We must NOT copy the slot's rootfs /boot/firmware: that directory is the
+# shared FAT boot partition's mount point, which shadows the slot's own
+# /boot/firmware. So an in-place "apk upgrade" of a slot updates the boot
+# partition + the slot's /boot/vmlinuz + /usr/lib/modules, but never the
+# slot's rootfs /boot/firmware copy — it stays frozen at image-build time.
+# Copying it would restore a stale kernel that no longer matches the slot's
+# modules (dead display + WiFi). The authoritative current kernel is
+# /boot/vmlinuz-<ver>, matched to /usr/lib/modules/<ver>; regenerate the
+# kernel images, dtbs and overlays from there (the same mapping the kernel
+# package's install hook uses). GPU firmware (start*.elf/fixup*.dat) is
+# version-tolerant and left as-is. Host boot config is never touched.
+for vmlinuz in "$PREV_MNT"/boot/vmlinuz-*; do
+	[ -f "$vmlinuz" ] || continue
+	kver="${vmlinuz##*/vmlinuz-}"
+	# Only a kernel whose module tree is actually populated is bootable.
+	[ -d "$PREV_MNT/usr/lib/modules/$kver/kernel" ] || continue
+
+	case "${kver##*-rpi-}" in
+		v6)   suffix=""      ;;
+		v7)   suffix="7"     ;;
+		v7l)  suffix="7l"    ;;
+		v8)   suffix="8"     ;;
+		2712) suffix="_2712" ;;
+		*)    continue       ;;
+	esac
+	cp -f "$vmlinuz" "/boot/firmware/kernel${suffix}.img"
+
+	dtbdir="$PREV_MNT/usr/lib/modules/$kver/dtb"
+	[ -d "$dtbdir/broadcom" ] && cp -f "$dtbdir/broadcom"/*.dtb /boot/firmware/ 2>/dev/null
+	if [ -d "$dtbdir/overlays" ]; then
+		mkdir -p /boot/firmware/overlays
+		cp -f "$dtbdir/overlays"/*.dtbo /boot/firmware/overlays/ 2>/dev/null
+		[ -f "$dtbdir/overlays/README" ] && cp -f "$dtbdir/overlays/README" /boot/firmware/overlays/ 2>/dev/null
+	fi
 done
 
 umount "$PREV_MNT"
