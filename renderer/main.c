@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <time.h>
 #include <math.h>
 
@@ -45,6 +46,42 @@ extern void pic_layer_render_timezone(cairo_t *cr, int width, int height,
                                       time_t now, void *user_data);
 extern void pic_layer_render_hud(cairo_t *cr, int width, int height,
                                  time_t now, void *user_data);
+
+/*
+ * rotate180_surface - Rotate an ARGB32 image surface 180° in place.
+ *
+ * Pure pixel reversal (no resampling): logical (x,y) <-> (w-1-x, h-1-y).
+ * Used for snapshot output so a rotated snapshot is the exact 180°
+ * reversal of the unrotated one — which makes it verifiable by diff.
+ */
+static void rotate180_surface(cairo_surface_t *s)
+{
+    int w, h, stride, y, x;
+    unsigned char *d;
+
+    cairo_surface_flush(s);
+    w = cairo_image_surface_get_width(s);
+    h = cairo_image_surface_get_height(s);
+    stride = cairo_image_surface_get_stride(s);
+    d = cairo_image_surface_get_data(s);
+    if (!d) return;
+
+    for (y = 0; y * 2 < h; y++) {
+        int oy = h - 1 - y;
+        uint32_t *row  = (uint32_t *)(d + (size_t)y  * stride);
+        uint32_t *orow = (uint32_t *)(d + (size_t)oy * stride);
+        if (y == oy) {                       /* centre row (odd height) */
+            for (x = 0; x * 2 < w; x++) {
+                uint32_t t = row[x]; row[x] = row[w-1-x]; row[w-1-x] = t;
+            }
+        } else {
+            for (x = 0; x < w; x++) {
+                uint32_t t = row[x]; row[x] = orow[w-1-x]; orow[w-1-x] = t;
+            }
+        }
+    }
+    cairo_surface_mark_dirty(s);
+}
 
 /*
  * parse_utc_time - Parse a "YYYY-MM-DD HH:MM:SS" string to time_t.
@@ -77,6 +114,7 @@ static void print_usage(const char *progname)
         "  --qth-lon <deg>        QTH longitude for zoom pan (default: 0)\n"
         "  --width <pixels>       Output width (default: 1920)\n"
         "  --height <pixels>      Output height (default: 1080)\n"
+        "  --rotate <0|180>       Rotate display output 180 degrees (default: 0)\n"
         "  --time <datetime>      Render at specific UTC time\n"
         "                         Format: \"YYYY-MM-DD HH:MM:SS\"\n"
         "  --help                 Show this help message\n"
@@ -197,6 +235,13 @@ static int run_snapshot(const char *output_path, const char *maps_dir,
     pic_layer_stack_composite(&stack, cr);
     cairo_destroy(cr);
 
+    /* Apply 180° display rotation to the snapshot output, matching what
+     * the live framebuffer path does at blit time. */
+    if (pic_config.rotate180) {
+        printf("snapshot: applying 180 rotation\n");
+        rotate180_surface(output);
+    }
+
     /* Write PNG */
     status = cairo_surface_write_to_png(output, output_path);
     if (status != CAIRO_STATUS_SUCCESS) {
@@ -242,6 +287,7 @@ int main(int argc, char *argv[])
         pic_config.map_zoom   = rconf.map_zoom;
         pic_config.qth_lat    = rconf.qth_lat;
         pic_config.qth_lon    = rconf.qth_lon;
+        pic_config.rotate180  = (rconf.rotate == 180) ? 1 : 0;
     }
 
     for (i = 1; i < argc; i++) {
@@ -270,6 +316,8 @@ int main(int argc, char *argv[])
             width = (int)strtol(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--height") == 0 && i + 1 < argc) {
             height = (int)strtol(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--rotate") == 0 && i + 1 < argc) {
+            pic_config.rotate180 = (strtol(argv[++i], NULL, 10) == 180) ? 1 : 0;
         } else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc) {
             render_time = parse_utc_time(argv[++i]);
             if (render_time == (time_t)-1) {

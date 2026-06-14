@@ -94,6 +94,13 @@
                         <option value="4k" {{if eq .Config.DisplayResolution "4k"}}selected{{end}}>4K (3840x2160)</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="display_rotate">Orientation</label>
+                    <select id="display_rotate" class="form-control">
+                        <option value="0" {{if eq .Config.DisplayRotate "0"}}selected{{end}}>Normal</option>
+                        <option value="180" {{if eq .Config.DisplayRotate "180"}}selected{{end}}>Upside down (180&deg;)</option>
+                    </select>
+                </div>
             </div>
             <!--
                 Map Zoom — full-width slider styled to match the antenna

@@ -74,6 +74,7 @@ extern void pic_qth_invalidate(void);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <math.h>
 #include <signal.h>
 #include <time.h>
@@ -266,6 +267,40 @@ static const char *get_resolution_suffix(int height)
 }
 
 /*
+ * fb_put_run - Copy one horizontal run of ARGB32 pixels to the
+ * framebuffer at logical frame position (fx, fy), length `len` pixels.
+ *
+ * This is the single point of truth for 180 display rotation. When
+ * rotate180 is set, the run is written reversed at the diagonally
+ * opposite position — logical (fx+i, fy) maps to physical
+ * (fb_w-1-fx-i, fb_h-1-fy) — so the whole frame appears flipped.
+ * Every framebuffer writer (main loop, ticker thread, splash) routes
+ * its row copies through here so they stay mutually consistent and the
+ * flip is defined in exactly one place. 180 preserves the frame
+ * dimensions, so no stride/geometry changes are needed.
+ */
+static inline void fb_put_run(unsigned char *fb_mem, int fb_stride,
+                              int fb_w, int fb_h, const unsigned char *src,
+                              int fx, int fy, int len, int rotate180)
+{
+    if (len <= 0) return;
+    if (!rotate180) {
+        memcpy(fb_mem + (size_t)fy * fb_stride + (size_t)fx * 4,
+               src, (size_t)len * 4);
+        return;
+    }
+    {
+        uint32_t *dst = (uint32_t *)(fb_mem +
+                        (size_t)(fb_h - 1 - fy) * fb_stride);
+        const uint32_t *s = (const uint32_t *)src;
+        int base = fb_w - 1 - fx;   /* physical x for run index 0 */
+        int i;
+        for (i = 0; i < len; i++)
+            dst[base - i] = s[i];
+    }
+}
+
+/*
  * show_splash - Display the boot splash logo on the framebuffer.
  *
  * Loads the splash JPEG, centres it on a dark background matching
@@ -326,7 +361,8 @@ static void show_splash(unsigned char *fb_mem, int fb_stride,
     stride = cairo_image_surface_get_stride(frame);
 
     for (y = 0; y < height; y++) {
-        memcpy(fb_mem + y * fb_stride, data + y * stride, width * 4);
+        fb_put_run(fb_mem, fb_stride, width, height,
+                   data + y * stride, 0, y, width, pic_config.rotate180);
     }
 
     cairo_surface_destroy(frame);
@@ -841,9 +877,10 @@ static void *ticker_render_func(void *arg)
             int stride = cairo_image_surface_get_stride(surface);
 
             for (y = 0; y < surface_h && (y + surface_y0) < a->height; y++) {
-                memcpy(a->fb_mem + (y + surface_y0) * a->fb_stride + x0 * bpp,
-                       data + y * stride + x0 * bpp,
-                       (x1 - x0) * bpp);
+                fb_put_run(a->fb_mem, a->fb_stride, a->width, a->height,
+                           data + y * stride + x0 * bpp,
+                           x0, y + surface_y0, x1 - x0,
+                           pic_config.rotate180);
             }
         }
     }
@@ -1669,6 +1706,7 @@ static int pic_display_run_framebuffer(const char *maps_dir,
                 pic_config.map_zoom   = rconf.map_zoom;
                 pic_config.qth_lat    = rconf.qth_lat;
                 pic_config.qth_lon    = rconf.qth_lon;
+                pic_config.rotate180  = (rconf.rotate == 180) ? 1 : 0;
                 pic_config_recompute_viewport();
                 printf("display: center_lon=%.1f map_zoom=%.0f%% "
                        "view_center=(%.2f,%.2f) span=(%.1f,%.1f)°\n",
@@ -1922,24 +1960,25 @@ static int pic_display_run_framebuffer(const char *maps_dir,
                     if (y >= ty0 && y < ty1) {
                         /* Ticker row: blit left and right of bar */
                         if (tx0 > 0)
-                            memcpy(fb_mem + y * fb_stride,
-                                   cairo_data + y * cairo_stride,
-                                   tx0 * 4);
+                            fb_put_run(fb_mem, fb_stride, width, height,
+                                       cairo_data + y * cairo_stride,
+                                       0, y, tx0, pic_config.rotate180);
                         if (tx1 < width)
-                            memcpy(fb_mem + y * fb_stride + tx1 * 4,
-                                   cairo_data + y * cairo_stride + tx1 * 4,
-                                   (width - tx1) * 4);
+                            fb_put_run(fb_mem, fb_stride, width, height,
+                                       cairo_data + y * cairo_stride + tx1 * 4,
+                                       tx1, y, width - tx1,
+                                       pic_config.rotate180);
                     } else {
-                        memcpy(fb_mem + y * fb_stride,
-                               cairo_data + y * cairo_stride,
-                               width * 4);
+                        fb_put_run(fb_mem, fb_stride, width, height,
+                                   cairo_data + y * cairo_stride,
+                                   0, y, width, pic_config.rotate180);
                     }
                 }
             } else {
                 for (y = 0; y < height; y++) {
-                    memcpy(fb_mem + y * fb_stride,
-                           cairo_data + y * cairo_stride,
-                           width * 4);
+                    fb_put_run(fb_mem, fb_stride, width, height,
+                               cairo_data + y * cairo_stride,
+                               0, y, width, pic_config.rotate180);
                 }
             }
         }

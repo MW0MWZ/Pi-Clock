@@ -45,6 +45,7 @@ type RendererConfig struct {
 	GridSquare        string `json:"grid_square"`
 	DisplayResolution string `json:"display_resolution"`
 	MapZoom           string `json:"map_zoom"`
+	DisplayRotate     string `json:"display_rotate"` // "0" or "180"
 }
 
 // Load reads the renderer config file and returns a RendererConfig.
@@ -57,6 +58,7 @@ func Load() *RendererConfig {
 		GridSquare:        "",
 		DisplayResolution: "1080p",
 		MapZoom:           "0",
+		DisplayRotate:     "0",
 	}
 
 	cfg.Reload()
@@ -102,6 +104,8 @@ func (c *RendererConfig) Reload() {
 			c.GridSquare = val
 		case "MAP_ZOOM":
 			c.MapZoom = val
+		case "DISPLAY_ROTATE":
+			c.DisplayRotate = val
 		case "DISPLAY_RESOLUTION":
 			// Migrate legacy "native" value (removed in favour of explicit
 			// 1080p/720p/1440p/4k choices — native auto-detect never worked
@@ -124,7 +128,7 @@ func (c *RendererConfig) saveUnlocked() error {
 	managed := map[string]bool{
 		"CENTER_LON": true, "QTH_LAT": true, "QTH_LON": true,
 		"CALLSIGN": true, "GRID_SQUARE": true, "DISPLAY_RESOLUTION": true,
-		"MAP_ZOOM": true,
+		"MAP_ZOOM": true, "DISPLAY_ROTATE": true,
 	}
 
 	var extra []string
@@ -150,8 +154,9 @@ CALLSIGN=%s
 GRID_SQUARE=%s
 DISPLAY_RESOLUTION=%s
 MAP_ZOOM=%s
+DISPLAY_ROTATE=%s
 `, c.CenterLon, c.QthLat, c.QthLon, c.Callsign, c.GridSquare,
-		c.DisplayResolution, c.MapZoom)
+		c.DisplayResolution, c.MapZoom, c.DisplayRotate)
 
 	for _, line := range extra {
 		content += line + "\n"
@@ -193,6 +198,7 @@ func (c *RendererConfig) Snapshot() RendererConfig {
 		GridSquare:        c.GridSquare,
 		DisplayResolution: c.DisplayResolution,
 		MapZoom:           c.MapZoom,
+		DisplayRotate:     c.DisplayRotate,
 	}
 }
 
@@ -228,6 +234,13 @@ func (c *RendererConfig) Update(values map[string]string) error {
 	}
 	if v, ok := values["display_resolution"]; ok {
 		c.DisplayResolution = v
+	}
+	if v, ok := values["display_rotate"]; ok {
+		// Software 180 flip only (0 or 180); reject anything else.
+		if v != "180" {
+			v = "0"
+		}
+		c.DisplayRotate = v
 	}
 	if v, ok := values["map_zoom"]; ok {
 		// Validate as 0..100 integer — the renderer parses MAP_ZOOM

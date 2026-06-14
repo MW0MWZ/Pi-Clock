@@ -336,6 +336,10 @@ void pic_load_renderer_conf(pic_renderer_conf_t *conf)
                 if (val > 100.0) val = 100.0;
                 conf->map_zoom = val / 100.0;
             }
+        } else if (strncmp(line, "DISPLAY_ROTATE=", 15) == 0) {
+            /* Only 0 and 180 are supported today; anything else
+             * (incl. future 90/270) falls back to 0 = normal. */
+            conf->rotate = (strtol(line + 15, NULL, 10) == 180) ? 180 : 0;
         }
     }
     fclose(f);

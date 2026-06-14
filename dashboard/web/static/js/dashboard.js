@@ -377,7 +377,8 @@ function saveConfig() {
         qth_lon: val('qth_lon'),
         callsign: val('callsign'),
         grid_square: val('grid_square'),
-        display_resolution: newRes
+        display_resolution: newRes,
+        display_rotate: val('display_rotate')
     }).then(function() {
         /* Check if resolution changed — needs reboot to take effect */
         var msg = 'Configuration saved';

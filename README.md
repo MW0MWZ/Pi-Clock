@@ -184,16 +184,31 @@ Installs to the inactive slot. Automatic rollback after 3 failed boots.
 
 ## Building from Source
 
-Requires Docker:
+### Renderer
+
+The renderer is plain C. Install the dev libraries (`cairo`, `sdl2`, `libdrm`, `openssl`, `pkgconf`, `build-base`; on macOS `brew install cairo sdl2`), then:
 
 ```bash
-cd src
-docker build -t pi-clock .
-docker run --rm -v $(pwd)/../temp/output:/output pi-clock \
-    --snapshot /output/test.png
+cd renderer
+make
 ```
 
-The full OS image is built by GitHub Actions — see Actions > Build Pi-Clock OS Image.
+Test without a display using snapshot mode — it renders a single frame to a PNG on any Linux/macOS host:
+
+```bash
+./pi-clock --snapshot test.png --maps-dir /path/to/maps
+```
+
+### Maps
+
+The map images are produced by a Docker pipeline that downloads the NASA / Natural Earth source data and resizes it to each resolution:
+
+```bash
+docker build -t pi-clock-maps -f maps/Dockerfile maps/
+docker run --rm -v $(pwd)/maps/output:/output pi-clock-maps
+```
+
+The APKs and full OS image are built by GitHub Actions — see Actions > Build Pi-Clock OS Image.
 
 ---
 

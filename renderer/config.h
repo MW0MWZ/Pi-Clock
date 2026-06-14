@@ -67,6 +67,13 @@ typedef struct {
     double view_span_lon;
 
     unsigned int viewport_gen;
+
+    /* Display output rotation. 0 = normal, 1 = 180° flip. Applied at
+     * the framebuffer-write stage (and to snapshot output), so it works
+     * on every Pi generation and display type without config.txt/KMS
+     * changes. Runtime-toggleable via SIGHUP (180° preserves the frame
+     * dimensions, so no buffers need reallocating). */
+    int rotate180;
 } pic_config_t;
 
 /* Maximum zoom factor at map_zoom=1.0.
@@ -211,6 +218,7 @@ typedef struct {
     double qth_lon;
     double center_lon;
     double map_zoom;     /* 0.0..1.0, parsed from MAP_ZOOM=0..100 */
+    int rotate;          /* DISPLAY_ROTATE: 0 (normal) or 180 (flip) */
 } pic_renderer_conf_t;
 
 /*
